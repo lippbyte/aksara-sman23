@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { PredikatKinerja, PredikatMgmp } from '../constants';
-import type { RentangPekan } from '../domain/pekan';
+import type { PekanSebagian, RentangPekan } from '../domain/pekan';
 import type { JendelaPenilaian } from '../domain/skor';
 import { paginationQuerySchema } from './common';
 import { idWajib, skorSchema, teksOpsional, teksOpsionalQuery } from './dasar';
@@ -147,6 +147,8 @@ export interface DaftarPenilaian<T> {
    * (bukan 0); halaman menampilkan peringatan.
    */
   pekan_belum_disinkron: RentangPekan[];
+  /** Pekan yang sudah selesai dengan rekap kurang dari jumlah guru aktif berjam wajib. */
+  pekan_rekap_sebagian: PekanSebagian[];
 }
 
 export interface HasilSyncPenilaian {

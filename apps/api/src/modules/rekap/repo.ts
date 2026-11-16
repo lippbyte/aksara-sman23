@@ -29,6 +29,7 @@ function keRekap(r: Baris): Rekap {
     alasan_koreksi: r.alasan_koreksi,
     nama_pengoreksi: r.pengoreksi?.name ?? null,
     dikoreksi_pada: r.dikoreksi_pada ? r.dikoreksi_pada.toISOString() : null,
+    jumlah_catatan_saat_koreksi: r.jumlah_catatan_saat_koreksi,
     berubah_sejak_koreksi: false,
     updated_at: r.updated_at.toISOString(),
   };
@@ -47,15 +48,11 @@ async function tandaiPerubahan(db: Db, rows: Rekap[]): Promise<Rekap[]> {
     '9999-12-31',
   );
   const akhir = terkoreksi.reduce((m, r) => (r.tanggal_selesai > m ? r.tanggal_selesai : m), '');
-  const sejak = terkoreksi.reduce(
-    (m, r) => (r.dikoreksi_pada !== null && r.dikoreksi_pada < m ? r.dikoreksi_pada : m),
-    '9999-12-31T00:00:00.000Z',
-  );
   const kehadiran = await db.kehadiran.findMany({
     where: {
       guru_id: { in: [...new Set(terkoreksi.map((r) => r.guru_id))] },
+      // Semua catatan (bukan hanya yang baru) agar jumlahnya bisa dibandingkan dengan snapshot.
       tanggal: { gte: keDate(awal), lte: keDate(akhir) },
-      updated_at: { gt: new Date(sejak) },
     },
     select: { guru_id: true, tanggal: true, updated_at: true },
   });
@@ -131,9 +128,23 @@ export async function ubah(
     alasan_koreksi: string;
     dikoreksi_oleh: number;
     dikoreksi_pada: Date;
+    jumlah_catatan_saat_koreksi: number;
   },
 ): Promise<Rekap> {
   return keRekap(await db.rekapKehadiranGuru.update({ where: { id }, data, include }));
+}
+
+/** Jumlah catatan kehadiran guru pada rentang pekan (snapshot saat koreksi). */
+export async function jumlahCatatanPekan(
+  db: Db,
+  r: { guru_id: number; tanggal_mulai: string; tanggal_selesai: string },
+): Promise<number> {
+  return db.kehadiran.count({
+    where: {
+      guru_id: r.guru_id,
+      tanggal: { gte: keDate(r.tanggal_mulai), lte: keDate(r.tanggal_selesai) },
+    },
+  });
 }
 
 export async function hapus(db: Db, id: number): Promise<void> {

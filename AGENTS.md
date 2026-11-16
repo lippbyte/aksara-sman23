@@ -21,7 +21,7 @@ Bila dokumen bertentangan dengan prototype, ikuti dokumen. Bila dokumen diam, ta
 | Frontend | React + Vite, React Router, TanStack Query, TanStack Table, react-hook-form + zod, Tailwind CSS v4, shadcn/ui (Radix), lucide-react, Recharts, date-fns (`id`), sonner |
 | Backend | Express 5, zod, Prisma ORM (MySQL), express-session + express-mysql-session, argon2, helmet, express-rate-limit, pino |
 | Database | MySQL 8 (InnoDB, utf8mb4, zona waktu aplikasi `Asia/Jakarta`) |
-| Uji | Vitest (unit dan integrasi), Supertest (API), Playwright (alur utama, menyusul) |
+| Uji | Vitest (unit dan integrasi), Supertest (API), Playwright (alur utama, `apps/e2e`, `npm run e2e`) |
 | Kualitas | ESLint, Prettier, `tsc --noEmit` |
 | Lokal | Docker Compose untuk MySQL |
 
@@ -52,6 +52,8 @@ Pasang versi stabil terbaru saat inisialisasi dan kunci di `package-lock.json`. 
 │  │        ├─ auth/  dashboard/  kehadiran/  kehadiran-siswa/  rekap/
 │  │        ├─ penilaian-kinerja/  penilaian-mgmp/  laporan/  audit/  settings/
 │  │        └─ <modul>/{routes,controller,service,repo}.ts + *.test.ts
+│  ├─ e2e/                     # Playwright: playwright.config.ts, tests/*.spec.ts
+│  │                           # (basis data *_e2e di-seed ulang tiap run; viewport 360 & 1280)
 │  └─ web/
 │     └─ src/
 │        ├─ app/               # router, providers, layout (sidebar, header)
@@ -74,6 +76,7 @@ npm run dev                   # api :3001 + web :5173 (Vite proxy /api → api)
 npm run test                  # vitest semua workspace
 npm run lint && npm run typecheck
 npm run build
+npm run e2e                   # Playwright; butuh E2E_DATABASE_URL (*_e2e) dan `npx playwright install chromium`
 ```
 
 Sebelum menyatakan pekerjaan selesai, jalankan `lint`, `typecheck`, dan `test`. Semuanya harus hijau.
@@ -124,6 +127,7 @@ Sebelum menyatakan pekerjaan selesai, jalankan `lint`, `typecheck`, dan `test`. 
 - [ ] Test: fungsi domain, API (sukses, 400, 401, 403, 409/422), dan pembatasan kelas untuk sekretaris.
 - [ ] Log aktivitas tercatat untuk perubahan data.
 - [ ] State kosong, memuat, dan galat ditangani di UI.
+- [ ] Alur yang disentuh punya e2e atau sudah dicoba manual di browser.
 - [ ] `lint`, `typecheck`, dan `test` hijau; tidak ada data nyata.
 - [ ] Ringkasan perubahan + daftar hal yang perlu dikonfirmasi tim.
 

@@ -170,7 +170,8 @@ export function PenilaianMgmpPage() {
       <InfoJendela jendela={jendela} periode={periode} admin={admin} />
       {!sekretaris && (
         <PeringatanPekan
-          pekan={daftar.data?.pekan_belum_disinkron}
+          belum={daftar.data?.pekan_belum_disinkron}
+          sebagian={daftar.data?.pekan_rekap_sebagian}
           bolehRekap={user.role === 'admin' || user.role === 'manajemen_guru'}
         />
       )}

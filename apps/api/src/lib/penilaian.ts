@@ -2,12 +2,15 @@ import {
   jendelaPenilaian,
   pekanBelumDisinkron,
   pekanDalamBulan,
+  pekanRekapSebagian,
   type JendelaPenilaian,
+  type PekanSebagian,
   type PenggunaSesi,
   type Periode,
   type RentangPekan,
 } from '@sms/shared';
 import { catatAudit, type KonteksAudit } from './audit';
+import { keNumber } from './konversi';
 import { businessRule } from './errors';
 import type { Db } from './prisma';
 import type { PengaturanSekolah } from './sekolah';
@@ -63,21 +66,39 @@ export function periksaJendela(
 }
 
 /**
- * Pekan bulan periode yang sudah selesai tetapi belum punya rekap sama sekali (satu query
- * agregat). Pemilihan pekan dari fungsi domain.
+ * Status sinkron pekan-pekan bulan periode (yang sudah selesai):
+ * - `belum`: belum punya baris rekap sama sekali;
+ * - `sebagian`: punya baris, tetapi kurang dari jumlah guru aktif berjam wajib > 0.
+ * Tiga query; pemilihan pekan oleh fungsi domain.
  */
-export async function pekanBelumDisinkronPeriode(
+export async function statusSinkronPeriode(
   db: Db,
   p: Periode,
   pengaturan: PengaturanSekolah,
-): Promise<RentangPekan[]> {
+): Promise<{ belum: RentangPekan[]; sebagian: PekanSebagian[] }> {
   const pekan = pekanDalamBulan(p.bulan, p.tahun, pengaturan.pekan);
-  if (pekan.length === 0) return [];
-  const tersimpan = await db.rekapKehadiranGuru.groupBy({
-    by: ['tahun', 'minggu_ke'],
-    where: { OR: pekan.map((w) => ({ tahun: w.tahun, minggu_ke: w.minggu_ke })) },
-  });
-  return pekanBelumDisinkron(pekan, tersimpan, hariIni());
+  if (pekan.length === 0) return { belum: [], sebagian: [] };
+  const [rekap, jadwal] = await Promise.all([
+    db.rekapKehadiranGuru.findMany({
+      where: { OR: pekan.map((w) => ({ tahun: w.tahun, minggu_ke: w.minggu_ke })) },
+      select: { tahun: true, minggu_ke: true, guru_id: true },
+    }),
+    // Jam wajib = jadwal pada hari efektif (§6.3); hanya guru aktif.
+    db.jadwalMengajar.groupBy({
+      by: ['guru_id'],
+      where: { guru: { status: 'aktif' }, hari: { in: [...pengaturan.pekan.hari_efektif] } },
+      _sum: { total_jam_mengajar: true },
+    }),
+  ]);
+  const hari = hariIni();
+  const baris = rekap.map((r) => ({ ...r, guru_id: keNumber(r.guru_id) }));
+  const guruBerjadwal = jadwal
+    .filter((j) => (j._sum.total_jam_mengajar ?? 0) > 0)
+    .map((j) => keNumber(j.guru_id));
+  return {
+    belum: pekanBelumDisinkron(pekan, baris, hari),
+    sebagian: pekanRekapSebagian(pekan, baris, guruBerjadwal, hari),
+  };
 }
 
 export async function catatDiLuarJendela(

@@ -136,26 +136,39 @@ export function skorKehadiranMgmp(
 }
 
 /**
- * Baris rekap yang dikoreksi manual: adakah catatan kehadiran guru itu pada pekan tersebut
- * yang dibuat atau diubah SETELAH `dikoreksi_pada`? Hanya penanda; rekap tidak dihitung ulang.
+ * Baris rekap yang dikoreksi manual: apakah catatan kehadiran guru itu pada pekan tersebut
+ * berubah sejak dikoreksi? Benar bila
+ * - jumlah catatan pekan itu sekarang berbeda dari snapshot saat dikoreksi (menangkap
+ *   catatan yang DIHAPUS maupun ditambah), ATAU
+ * - ada catatan yang dibuat/diubah SETELAH `dikoreksi_pada`.
+ * Hanya penanda; rekap tidak dihitung ulang. Snapshot kosong (koreksi sebelum Fase 11)
+ * → hanya pemeriksaan waktu.
  *
- * ASUMSI: catatan yang DIHAPUS tidak terdeteksi (tidak ada jejak per guru/tanggal selain log).
- *
- * @param kehadiran catatan kehadiran guru itu; `updated_at` ISO (UTC).
+ * @param kehadiran SEMUA catatan kehadiran guru itu (disaring ke rentang pekan di sini);
+ *   `updated_at` ISO (UTC).
  */
 export function berubahSejakKoreksi(
-  rekap: { tanggal_mulai: TanggalISO; tanggal_selesai: TanggalISO; dikoreksi_pada: string | null },
+  rekap: {
+    tanggal_mulai: TanggalISO;
+    tanggal_selesai: TanggalISO;
+    dikoreksi_pada: string | null;
+    jumlah_catatan_saat_koreksi: number | null;
+  },
   kehadiran: readonly { tanggal: TanggalISO; updated_at: string }[],
 ): boolean {
   const pada = rekap.dikoreksi_pada;
   if (pada === null) return false;
-  const batas = new Date(pada).getTime();
-  return kehadiran.some(
-    (k) =>
-      k.tanggal >= rekap.tanggal_mulai &&
-      k.tanggal <= rekap.tanggal_selesai &&
-      new Date(k.updated_at).getTime() > batas,
+  const pekan = kehadiran.filter(
+    (k) => k.tanggal >= rekap.tanggal_mulai && k.tanggal <= rekap.tanggal_selesai,
   );
+  if (
+    rekap.jumlah_catatan_saat_koreksi !== null &&
+    pekan.length !== rekap.jumlah_catatan_saat_koreksi
+  ) {
+    return true;
+  }
+  const batas = new Date(pada).getTime();
+  return pekan.some((k) => new Date(k.updated_at).getTime() > batas);
 }
 
 /**

@@ -1,0 +1,88 @@
+# CI: lint, typecheck, test (Vitest + Supertest), dan e2e (Playwright) dengan MySQL 8.
+# Tanpa rahasia: semua nilai di bawah hanya untuk basis data sementara di runner CI,
+# dan berisi data fiktif dari seeder. SESSION_SECRET dibuat acak setiap run.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root-bukan-rahasia
+          MYSQL_DATABASE: sms_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-root-bukan-rahasia"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      # .env disusun dari NAMA variabel di .env.example; nilainya khusus CI (bukan rahasia).
+      # Variabel tanpa nilai CI (mis. NODE_ENV) tidak ditulis, agar tiap alat memakai bawaannya.
+      - name: Siapkan .env dari .env.example
+        env:
+          API_PORT: '3001'
+          APP_ORIGIN: http://localhost:5173
+          VITE_APP_NAME: School Management System
+          MYSQL_PORT: '3306'
+          MYSQL_DATABASE: sms_ci
+          MYSQL_USER: root
+          MYSQL_PASSWORD: ci-root-bukan-rahasia
+          MYSQL_ROOT_PASSWORD: ci-root-bukan-rahasia
+          DATABASE_URL: mysql://root:ci-root-bukan-rahasia@127.0.0.1:3306/sms_ci
+          TEST_DATABASE_URL: mysql://root:ci-root-bukan-rahasia@127.0.0.1:3306/sms_test
+          E2E_DATABASE_URL: mysql://root:ci-root-bukan-rahasia@127.0.0.1:3306/sms_e2e
+          SEED_PASSWORD: kata-sandi-ci-fiktif
+          LOG_LEVEL: warn
+        run: |
+          export SESSION_SECRET="$(openssl rand -hex 32)"
+          node -e '
+            const fs = require("fs");
+            const nama = fs.readFileSync(".env.example", "utf8").split(/\r?\n/)
+              .map((b) => /^([A-Z0-9_]+)=/.exec(b)?.[1]).filter(Boolean);
+            const baris = nama.filter((n) => process.env[n]).map((n) => `${n}=${process.env[n]}`);
+            fs.writeFileSync(".env", baris.join("\n") + "\n");
+            console.log("Variabel .env:", nama.map((n) => process.env[n] ? n : `${n} (bawaan)`).join(", "));
+          '
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm run test
+
+      - name: Pasang Chromium untuk Playwright
+        run: npx playwright install --with-deps chromium
+
+      - run: npm run e2e
+
+      - name: Simpan laporan e2e bila gagal
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: apps/e2e/test-results/
+          retention-days: 7

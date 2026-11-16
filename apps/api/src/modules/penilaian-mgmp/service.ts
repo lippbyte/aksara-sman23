@@ -21,7 +21,7 @@ import {
   catatDiLuarJendela,
   infoJendela,
   namaPeriode,
-  pekanBelumDisinkronPeriode,
+  statusSinkronPeriode,
   periksaJendela,
 } from '../../lib/penilaian';
 import { prisma, type Tx } from '../../lib/prisma';
@@ -96,15 +96,16 @@ export async function daftar(
   user: PenggunaSesi,
 ): Promise<DaftarPenilaian<PenilaianMgmpBaris>> {
   const pengaturan = await ambilPengaturan(prisma);
-  const [rows, belum] = await Promise.all([
+  const [rows, sinkron] = await Promise.all([
     susunBaris(p, user),
-    pekanBelumDisinkronPeriode(prisma, p, pengaturan),
+    statusSinkronPeriode(prisma, p, pengaturan),
   ]);
   return {
     data: rows,
     meta: { page: 1, pageSize: rows.length, total: rows.length },
     jendela: infoJendela(p, pengaturan),
-    pekan_belum_disinkron: belum,
+    pekan_belum_disinkron: sinkron.belum,
+    pekan_rekap_sebagian: sinkron.sebagian,
   };
 }
 
@@ -316,7 +317,16 @@ export async function simpanSkorSiswa(
   const berjadwal = (await repo.kelasBerjadwal(prisma, [input.mgmp_id])).get(input.mgmp_id) ?? [];
   if (user.role === 'sekretaris_kelas') periksaKelasSekretaris(berjadwal, kelasId);
   else if (!berjadwal.includes(kelasId)) {
-    throw businessRule('Kelas ini tidak punya jadwal dari guru MGMP tersebut.');
+    const [mgmp, kelas] = await Promise.all([
+      repo.ambilMgmp(prisma, input.mgmp_id),
+      repo.ambilKelas(prisma, kelasId),
+    ]);
+    if (!mgmp) throw badRequest('MGMP tidak ditemukan.');
+    if (!kelas) throw badRequest('Kelas tidak ditemukan.');
+    throw businessRule(
+      `Kelas ${kelas.nama_kelas} tidak diajar oleh guru aktif MGMP ${mgmp.nama_mapel}, sehingga skor siswanya tidak dapat diisi. Pilih kelas yang punya jadwal mengajar guru MGMP ini.`,
+      { kelas_id: ['Kelas ini tidak punya jadwal mengajar guru MGMP ini.'] },
+    );
   }
 
   const pengaturan = await ambilPengaturan(prisma);

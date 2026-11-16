@@ -240,43 +240,71 @@ describe('rataRataPekanGuru', () => {
 });
 
 describe('berubahSejakKoreksi', () => {
+  const lama = '2026-03-09T00:00:00.000Z';
+  const baru = '2026-03-11T00:00:00.000Z';
   const rekap = {
     tanggal_mulai: '2026-03-02',
     tanggal_selesai: '2026-03-06',
     dikoreksi_pada: '2026-03-10T03:00:00.000Z',
+    jumlah_catatan_saat_koreksi: 2,
   };
+  const dua = [
+    { tanggal: '2026-03-02', updated_at: lama },
+    { tanggal: '2026-03-04', updated_at: lama },
+  ];
 
-  it('catatan pekan itu yang diubah setelah koreksi → true', () => {
+  it('tidak ada perubahan: jumlah sama dan tidak ada yang diubah setelah koreksi → false', () => {
+    expect(berubahSejakKoreksi(rekap, dua)).toBe(false);
+    // Catatan di luar pekan tidak dihitung.
     expect(
       berubahSejakKoreksi(rekap, [
+        ...dua,
+        { tanggal: '2026-03-09', updated_at: baru },
+        { tanggal: '2026-02-27', updated_at: baru },
+      ]),
+    ).toBe(false);
+  });
+
+  it('catatan DIHAPUS sejak koreksi (jumlah berkurang) → true', () => {
+    expect(berubahSejakKoreksi(rekap, dua.slice(0, 1))).toBe(true);
+    expect(berubahSejakKoreksi(rekap, [])).toBe(true);
+  });
+
+  it('catatan ditambah (jumlah bertambah) → true', () => {
+    expect(berubahSejakKoreksi(rekap, [...dua, { tanggal: '2026-03-05', updated_at: lama }])).toBe(
+      true,
+    );
+  });
+
+  it('jumlah sama tetapi ada yang diubah setelah koreksi → true; tepat saat koreksi → false', () => {
+    expect(
+      berubahSejakKoreksi(rekap, [
+        dua[0]!,
         { tanggal: '2026-03-04', updated_at: '2026-03-10T03:00:01.000Z' },
       ]),
     ).toBe(true);
-  });
-
-  it('catatan sebelum/tepat saat koreksi, atau di luar pekan → false', () => {
     expect(
       berubahSejakKoreksi(rekap, [
-        { tanggal: '2026-03-04', updated_at: '2026-03-10T03:00:00.000Z' },
-        { tanggal: '2026-03-09', updated_at: '2026-03-11T00:00:00.000Z' },
-        { tanggal: '2026-02-27', updated_at: '2026-03-11T00:00:00.000Z' },
+        dua[0]!,
+        { tanggal: '2026-03-04', updated_at: rekap.dikoreksi_pada },
       ]),
     ).toBe(false);
   });
 
   it('batas pekan inklusif', () => {
-    const baru = '2026-03-11T00:00:00.000Z';
-    expect(berubahSejakKoreksi(rekap, [{ tanggal: '2026-03-02', updated_at: baru }])).toBe(true);
-    expect(berubahSejakKoreksi(rekap, [{ tanggal: '2026-03-06', updated_at: baru }])).toBe(true);
+    const r = { ...rekap, jumlah_catatan_saat_koreksi: 0 };
+    expect(berubahSejakKoreksi(r, [{ tanggal: '2026-03-02', updated_at: lama }])).toBe(true);
+    expect(berubahSejakKoreksi(r, [{ tanggal: '2026-03-06', updated_at: lama }])).toBe(true);
   });
 
-  it('belum dikoreksi atau tanpa catatan → false', () => {
-    expect(
-      berubahSejakKoreksi({ ...rekap, dikoreksi_pada: null }, [
-        { tanggal: '2026-03-04', updated_at: '2026-03-11T00:00:00.000Z' },
-      ]),
-    ).toBe(false);
-    expect(berubahSejakKoreksi(rekap, [])).toBe(false);
+  it('tanpa snapshot (koreksi lama) → hanya pemeriksaan waktu', () => {
+    const r = { ...rekap, jumlah_catatan_saat_koreksi: null };
+    expect(berubahSejakKoreksi(r, [])).toBe(false);
+    expect(berubahSejakKoreksi(r, [{ tanggal: '2026-03-04', updated_at: baru }])).toBe(true);
+  });
+
+  it('belum dikoreksi → false', () => {
+    expect(berubahSejakKoreksi({ ...rekap, dikoreksi_pada: null }, [])).toBe(false);
   });
 });
 

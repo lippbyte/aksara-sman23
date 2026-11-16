@@ -111,6 +111,7 @@ export async function hitungUlangRekapPekan(
       alasan_koreksi = IF(${jaga}, alasan_koreksi, NULL),
       dikoreksi_oleh = IF(${jaga}, dikoreksi_oleh, NULL),
       dikoreksi_pada = IF(${jaga}, dikoreksi_pada, NULL),
+      jumlah_catatan_saat_koreksi = IF(${jaga}, jumlah_catatan_saat_koreksi, NULL),
       dikoreksi_manual = IF(${jaga}, 1, 0)`;
 
   return timpa

@@ -19,7 +19,7 @@ import {
   infoJendela,
   namaPeriode,
   periksaJendela,
-  pekanBelumDisinkronPeriode,
+  statusSinkronPeriode,
 } from '../../lib/penilaian';
 import { prisma } from '../../lib/prisma';
 import { ambilPengaturan } from '../../lib/sekolah';
@@ -54,15 +54,16 @@ export async function daftar(
 ): Promise<DaftarPenilaian<PenilaianKinerjaBaris>> {
   const pengaturan = await ambilPengaturan(prisma);
   const { page, pageSize, ...periode } = q;
-  const [hasil, belum] = await Promise.all([
+  const [hasil, sinkron] = await Promise.all([
     repo.daftar(periode, { page, pageSize }),
-    pekanBelumDisinkronPeriode(prisma, periode, pengaturan),
+    statusSinkronPeriode(prisma, periode, pengaturan),
   ]);
   return {
     data: hasil.rows.map(keBaris),
     meta: { page, pageSize, total: hasil.total },
     jendela: infoJendela(periode, pengaturan),
-    pekan_belum_disinkron: belum,
+    pekan_belum_disinkron: sinkron.belum,
+    pekan_rekap_sebagian: sinkron.sebagian,
   };
 }
 

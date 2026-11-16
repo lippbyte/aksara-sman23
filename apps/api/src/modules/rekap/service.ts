@@ -162,6 +162,7 @@ export async function ubah(
       alasan_koreksi: input.alasan_koreksi,
       dikoreksi_oleh: user.id,
       dikoreksi_pada: new Date(),
+      jumlah_catatan_saat_koreksi: await repo.jumlahCatatanPekan(tx, lama),
     });
     await catatAudit(tx, audit, {
       module: 'Rekap',

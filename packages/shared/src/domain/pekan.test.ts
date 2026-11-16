@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hitungMingguKe,
   pekanBelumDisinkron,
+  pekanRekapSebagian,
   pekanDalamBulan,
   pekanDariTanggal,
   rentangBeririsan,
@@ -215,5 +216,45 @@ describe('pekanBelumDisinkron', () => {
         (p) => p.minggu_ke,
       ),
     ).toEqual([8]);
+  });
+});
+
+describe('pekanRekapSebagian', () => {
+  const maret = pekanDalamBulan(3, 2026, SENIN_JUMAT); // pekan 8–12
+  const baris = (minggu_ke: number, guru: number[]) =>
+    guru.map((guru_id) => ({ tahun: 2026, minggu_ke, guru_id }));
+  const berjadwal = [1, 2, 3];
+
+  it('pekan selesai dengan baris < guru berjadwal → sebagian, dengan jumlahnya', () => {
+    const hasil = pekanRekapSebagian(
+      maret,
+      [...baris(8, [1, 2, 3]), ...baris(9, [1]), ...baris(10, [1, 2])],
+      berjadwal,
+      '2026-03-28',
+    );
+    expect(hasil.map((p) => [p.minggu_ke, p.terekap, p.jumlah_guru])).toEqual([
+      [9, 1, 3],
+      [10, 2, 3],
+    ]);
+  });
+
+  it('pekan tanpa baris sama sekali tidak termasuk (sudah "belum disinkron")', () => {
+    expect(
+      pekanRekapSebagian(maret, baris(8, [1]), berjadwal, '2026-12-31').map((p) => p.minggu_ke),
+    ).toEqual([8]);
+  });
+
+  it('pekan yang belum selesai tidak termasuk', () => {
+    // Pekan 11 selesai Jumat 27 Mar.
+    expect(pekanRekapSebagian(maret, baris(11, [1]), berjadwal, '2026-03-27')).toEqual([]);
+  });
+
+  it('baris guru tanpa jam wajib atau nonaktif tidak menutupi kekurangan', () => {
+    const hasil = pekanRekapSebagian(maret, baris(8, [1, 2, 7, 8]), berjadwal, '2026-12-31');
+    expect(hasil.map((p) => [p.minggu_ke, p.terekap])).toEqual([[8, 2]]);
+  });
+
+  it('tidak ada guru berjadwal → tidak ada pekan sebagian', () => {
+    expect(pekanRekapSebagian(maret, baris(8, [5]), [], '2026-12-31')).toEqual([]);
   });
 });

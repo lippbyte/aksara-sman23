@@ -125,6 +125,45 @@ export function pekanBelumDisinkron(
   return pekan.filter((p) => p.tanggal_selesai < hariIni && !ada.has(`${p.tahun}-${p.minggu_ke}`));
 }
 
+export interface PekanSebagian extends RentangPekan {
+  /** Guru berjadwal yang sudah punya baris rekap pekan ini. */
+  terekap: number;
+  /** Guru aktif berjam wajib > 0 (yang seharusnya punya rekap). */
+  jumlah_guru: number;
+}
+
+/**
+ * Pekan yang sudah selesai dan SUDAH punya baris rekap, tetapi belum untuk semua guru aktif
+ * berjam wajib > 0 (rekap sebagian, mis. terbentuk dari input kehadiran tanpa sinkron).
+ * Pekan tanpa baris sama sekali tidak termasuk (lihat `pekanBelumDisinkron`).
+ *
+ * @param rekap baris rekap (pekan + guru) pada pekan-pekan itu.
+ * @param guruBerjadwal ID guru aktif yang jam wajibnya > 0.
+ */
+export function pekanRekapSebagian(
+  pekan: readonly RentangPekan[],
+  rekap: readonly { tahun: number; minggu_ke: number; guru_id: number }[],
+  guruBerjadwal: readonly number[],
+  hariIni: TanggalISO,
+): PekanSebagian[] {
+  const berjadwal = new Set(guruBerjadwal);
+  const perPekan = new Map<string, { semua: number; guru: Set<number> }>();
+  for (const r of rekap) {
+    const kunci = `${r.tahun}-${r.minggu_ke}`;
+    const e = perPekan.get(kunci) ?? { semua: 0, guru: new Set<number>() };
+    e.semua += 1;
+    if (berjadwal.has(r.guru_id)) e.guru.add(r.guru_id);
+    perPekan.set(kunci, e);
+  }
+  return pekan.flatMap((p) => {
+    const e = perPekan.get(`${p.tahun}-${p.minggu_ke}`);
+    if (p.tanggal_selesai >= hariIni || !e || e.semua === 0) return [];
+    return e.guru.size < berjadwal.size
+      ? [{ ...p, terekap: e.guru.size, jumlah_guru: berjadwal.size }]
+      : [];
+  });
+}
+
 /** Dua rentang tanggal inklusif beririsan? */
 export function rentangBeririsan(
   a: { awal: TanggalISO; akhir: TanggalISO },

@@ -1,4 +1,4 @@
-import type { JendelaPenilaian, Periode, RentangPekan } from '@sms/shared';
+import type { JendelaPenilaian, PekanSebagian, Periode, RentangPekan } from '@sms/shared';
 import { CalendarClock, Info, TriangleAlert } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { FilterBar, FilterItem } from '@/components/FilterBar';
@@ -125,30 +125,56 @@ export function InfoJendela({ jendela, periode, admin }: InfoJendelaProps) {
   );
 }
 
+const labelP = (p: RentangPekan) => labelPekan(p.minggu_ke, p.tanggal_mulai, p.tanggal_selesai);
+
+/** Judul gabungan peringatan pekan (satu kalimat, tidak ganda). */
+export function judulPeringatanPekan(belum: number, sebagian: number): string {
+  if (belum > 0 && sebagian > 0)
+    return `${belum + sebagian} pekan bulan ini belum disinkron lengkap`;
+  if (belum > 0) return `${belum} pekan bulan ini belum disinkron`;
+  return `${sebagian} pekan bulan ini baru disinkron sebagian`;
+}
+
 /**
- * Peringatan pekan yang sudah selesai tetapi belum disinkron (belum punya rekap). Pekan itu
- * tidak ikut dihitung, bukan dihitung 0.
+ * Peringatan rekap pekan bulan ini (pekan yang sudah selesai), satu kotak untuk dua kasus:
+ * belum disinkron sama sekali, dan rekap sebagian (kurang dari guru aktif berjam wajib).
+ * Rekap yang belum ada tidak ikut dihitung, bukan dihitung 0.
  */
 export function PeringatanPekan({
-  pekan,
+  belum,
+  sebagian,
   bolehRekap,
 }: {
-  pekan: readonly RentangPekan[] | undefined;
+  belum: readonly RentangPekan[] | undefined;
+  sebagian: readonly PekanSebagian[] | undefined;
   bolehRekap: boolean;
 }) {
-  if (!pekan || pekan.length === 0) return null;
+  const nBelum = belum?.length ?? 0;
+  const nSebagian = sebagian?.length ?? 0;
+  if (nBelum === 0 && nSebagian === 0) return null;
   return (
     <div
       role="status"
       className="mb-3 flex items-start gap-3 rounded-xl border border-line bg-izin-soft p-4 text-sm"
     >
       <TriangleAlert className="mt-0.5 size-[18px] shrink-0 text-izin" aria-hidden="true" />
-      <div>
-        <p className="font-medium text-ink">{pekan.length} pekan bulan ini belum disinkron</p>
+      <div className="flex flex-col gap-1">
+        <p className="font-medium text-ink">{judulPeringatanPekan(nBelum, nSebagian)}</p>
+        <ul className="text-xs text-ink-muted">
+          {nBelum > 0 && <li>Belum disinkron: {belum?.map(labelP).join(', ')}.</li>}
+          {nSebagian > 0 && (
+            <li>
+              Baru sebagian:{' '}
+              {sebagian
+                ?.map((p) => `${labelP(p)}, ${p.terekap} dari ${p.jumlah_guru} guru`)
+                .join('; ')}
+              .
+            </li>
+          )}
+        </ul>
         <p className="text-xs text-ink-muted">
-          {pekan.map((p) => labelPekan(p.minggu_ke, p.tanggal_mulai, p.tanggal_selesai)).join(', ')}
-          . Skor kehadiran hanya dihitung dari pekan yang sudah punya rekap; pekan ini tidak
-          dihitung sebagai 0.{' '}
+          Skor kehadiran hanya dihitung dari rekap yang ada; rekap yang belum ada tidak dihitung
+          sebagai 0.{' '}
           {bolehRekap ? (
             <Link to="/rekap-kehadiran" className="font-medium text-ink underline">
               Buka Rekap Kehadiran Guru

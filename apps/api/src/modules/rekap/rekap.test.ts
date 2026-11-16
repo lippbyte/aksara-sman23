@@ -453,6 +453,31 @@ describe('koreksi manual', () => {
       alasan_koreksi: 'Diperiksa ulang (contoh)',
     });
     expect(ulang.body.data.berubah_sejak_koreksi).toBe(false);
+    // Snapshot jumlah catatan pekan itu disimpan saat koreksi.
+    const catatanPekan = await prisma.kehadiran.count({
+      where: {
+        guru_id: guruSabtu,
+        tanggal: { gte: keDate('2026-10-26'), lte: keDate('2026-10-30') },
+      },
+    });
+    expect(ulang.body.data.jumlah_catatan_saat_koreksi).toBe(catatanPekan);
+  });
+
+  it('lencana juga muncul bila catatan pekan itu DIHAPUS setelah koreksi', async () => {
+    const cariBaris = async () =>
+      (await manajemen.get(`${R}?minggu_ke=2&tahun=2026&guru_id=${guruSabtu}`)).body.data[0];
+    expect((await cariBaris()).berubah_sejak_koreksi).toBe(false);
+    // Catatan 26 Okt sudah ada sebelum koreksi; menghapusnya tidak meninggalkan jejak waktu.
+    const hapus = await prisma.kehadiran.deleteMany({
+      where: { guru_id: guruSabtu, tanggal: keDate('2026-10-26') },
+    });
+    expect(hapus.count).toBeGreaterThan(0);
+    expect(await cariBaris()).toMatchObject({
+      berubah_sejak_koreksi: true,
+      // Tetap tidak dihitung ulang.
+      total_jam_wajib: 3,
+      total_jam_hadir: 2,
+    });
   });
 
   it('timpa_koreksi: manajemen → 403; admin menimpa, tanda koreksi dihapus, tercatat di log', async () => {
@@ -480,6 +505,7 @@ describe('koreksi manual', () => {
       alasan_koreksi: null,
       dikoreksi_oleh: null,
       dikoreksi_pada: null,
+      jumlah_catatan_saat_koreksi: null,
     });
     const log = await prisma.auditLog.findFirst({ where: { aktivitas: 'TIMPA_KOREKSI_REKAP' } });
     expect(log?.description).toContain('Menimpa 1 baris');

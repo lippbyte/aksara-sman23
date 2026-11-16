@@ -116,6 +116,8 @@ export interface Rekap {
   alasan_koreksi: string | null;
   nama_pengoreksi: string | null;
   dikoreksi_pada: string | null;
+  /** Jumlah catatan kehadiran guru itu pada pekan ini saat dikoreksi (snapshot). */
+  jumlah_catatan_saat_koreksi: number | null;
   /**
    * Baris terkoreksi yang catatan kehadiran gurunya pada pekan itu dibuat/diubah setelah
    * dikoreksi. Hanya penanda; rekap tidak dihitung ulang otomatis.

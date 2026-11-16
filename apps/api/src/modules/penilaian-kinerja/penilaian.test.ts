@@ -440,7 +440,7 @@ describe('penilaian MGMP', () => {
     expect(tanpaKelas.status).toBe(400);
     expect(
       (await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: 99999999, skor: 90 })).status,
-    ).toBe(422);
+    ).toBe(400);
 
     const res = await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: kelasX2, skor: 90 });
     expect(res.status).toBe(200);
@@ -586,21 +586,32 @@ describe('penilaian MGMP', () => {
       ).toBe(403);
       await aturHariIni('2026-11-28');
 
-      // Peran lain: kelas tanpa jadwal → 422; kelas berjadwal → 200.
+      // Peran lain: kelas tanpa jadwal → 422 dengan pesan yang jelas; kelas berjadwal → 200.
       const dasar = { mgmp_id: idSatu, bulan: 11, tahun: 2026 };
+      const tolak = await penilai.put(`${PM}/skor-siswa`, {
+        ...dasar,
+        kelas_id: kelasX1,
+        skor: 60,
+      });
+      expect(tolak.status).toBe(422);
+      expect(tolak.body.error.message).toBe(
+        'Kelas X-1 tidak diajar oleh guru aktif MGMP Uji Satu Kelas, sehingga skor siswanya tidak dapat diisi. Pilih kelas yang punya jadwal mengajar guru MGMP ini.',
+      );
+      expect(tolak.body.error.details).toEqual({
+        kelas_id: ['Kelas ini tidak punya jadwal mengajar guru MGMP ini.'],
+      });
+      const tolakTanpa = await penilai.put(`${PM}/skor-siswa`, {
+        ...dasar,
+        mgmp_id: idTanpa,
+        kelas_id: kelasX1,
+        skor: 60,
+      });
+      expect(tolakTanpa.status).toBe(422);
+      expect(tolakTanpa.body.error.message).toContain('MGMP Uji Tanpa Jadwal');
       expect(
-        (await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: kelasX1, skor: 60 })).status,
-      ).toBe(422);
-      expect(
-        (
-          await penilai.put(`${PM}/skor-siswa`, {
-            ...dasar,
-            mgmp_id: idTanpa,
-            kelas_id: kelasX1,
-            skor: 60,
-          })
-        ).status,
-      ).toBe(422);
+        (await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: 99999999, skor: 60 })).body
+          .error.message,
+      ).toBe('Kelas tidak ditemukan.');
       const ok = await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: kelasX2, skor: 70 });
       expect(ok.status).toBe(200);
       expect(ok.body.data).toMatchObject({ kelas_terisi: 1, jumlah_kelas: 1, skor_siswa: 70 });
@@ -674,9 +685,53 @@ describe('peringatan pekan belum disinkron', () => {
     expect(baris.skor_kehadiran).toBe(rataRataBulanan(await rekapGuru(g.id), 11, 2026));
   });
 
+  it('pekan dengan rekap sebagian (kurang dari guru aktif berjadwal) dilaporkan terpisah', async () => {
+    await aturHariIni('2026-11-28');
+    // Pekan 4 (9–13 Nov) disinkron penuh, lalu satu baris guru dihapus.
+    expect(
+      (await manajemen.post('/api/v1/rekap-kehadiran/sync', { minggu_ke: 4, tahun: 2026 })).status,
+    ).toBe(200);
+    const g = guru[0]!;
+    await prisma.rekapKehadiranGuru.deleteMany({
+      where: { guru_id: g.id, tahun: 2026, minggu_ke: 4 },
+    });
+    await prisma.rekapKehadiranGuru.deleteMany({ where: { tahun: 2026, minggu_ke: 6 } });
+
+    const jadwal = await prisma.jadwalMengajar.groupBy({
+      by: ['guru_id'],
+      where: { guru: { status: 'aktif' }, hari: { in: [1, 2, 3, 4, 5] } },
+      _sum: { total_jam_mengajar: true },
+    });
+    const berjadwal = jadwal.filter((j) => (j._sum.total_jam_mengajar ?? 0) > 0).length;
+
+    for (const url of [`${PK}?bulan=11&tahun=2026`, `${PM}?bulan=11&tahun=2026`]) {
+      const body = (await manajemen.get(url)).body;
+      expect(body.pekan_rekap_sebagian).toContainEqual(
+        expect.objectContaining({ minggu_ke: 4, terekap: berjadwal - 1, jumlah_guru: berjadwal }),
+      );
+      // Pekan tanpa baris sama sekali hanya muncul sebagai "belum disinkron", tidak ganda.
+      const sebagian = body.pekan_rekap_sebagian.map((p: { minggu_ke: number }) => p.minggu_ke);
+      expect(sebagian).not.toContain(6);
+      expect(body.pekan_belum_disinkron.map((p: { minggu_ke: number }) => p.minggu_ke)).toContain(
+        6,
+      );
+      expect(
+        body.pekan_belum_disinkron.map((p: { minggu_ke: number }) => p.minggu_ke),
+      ).not.toContain(4);
+    }
+
+    // Setelah sinkron ulang, pekan 4 lengkap lagi.
+    await manajemen.post('/api/v1/rekap-kehadiran/sync', { minggu_ke: 4, tahun: 2026 });
+    const lagi = (await manajemen.get(`${PK}?bulan=11&tahun=2026`)).body;
+    expect(lagi.pekan_rekap_sebagian.map((p: { minggu_ke: number }) => p.minggu_ke)).not.toContain(
+      4,
+    );
+  });
+
   it('bulan berjalan tanpa pekan yang selesai → daftar kosong', async () => {
     await aturHariIni('2026-11-03');
     const res = await manajemen.get(`${PK}?bulan=12&tahun=2026`);
     expect(res.body.pekan_belum_disinkron).toEqual([]);
+    expect(res.body.pekan_rekap_sebagian).toEqual([]);
   });
 });

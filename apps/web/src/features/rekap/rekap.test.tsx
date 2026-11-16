@@ -66,6 +66,7 @@ const REKAP: Rekap = {
   alasan_koreksi: null,
   nama_pengoreksi: null,
   dikoreksi_pada: null,
+  jumlah_catatan_saat_koreksi: null,
   berubah_sejak_koreksi: false,
   updated_at: '2026-11-13T10:00:00.000Z',
 };
@@ -79,6 +80,7 @@ const REKAP_KOREKSI: Rekap = {
   alasan_koreksi: 'Mengajar pengganti (contoh)',
   nama_pengoreksi: 'Admin Contoh',
   dikoreksi_pada: '2026-11-14T03:00:00.000Z',
+  jumlah_catatan_saat_koreksi: 4,
   berubah_sejak_koreksi: true,
 };
 let terkoreksi = 0;

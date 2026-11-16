@@ -103,11 +103,13 @@ npm run e2e                  # Playwright, basis data *_e2e (lihat di bawah)
 
 ## Uji end-to-end (Playwright)
 
-Tiga alur utama dengan data seed fiktif, masing-masing di viewport 360 px dan 1280 px:
+Empat alur utama dengan data seed fiktif, masing-masing di viewport 360 px dan 1280 px:
 
 - sekretaris mencatat kehadiran guru (termasuk ditolak karena jam bentrok), rekap ikut berubah;
 - sekretaris mengabsen siswa kelasnya secara massal, riwayat tampil, kelas lain tidak terlihat;
 - manajemen membuka dashboard (grafik dan tabel alternatif), rekap, lalu ekspor CSV.
+- login salah menampilkan pesan galat; login tiap peran mendarat di dashboard yang sesuai;
+  logout kembali ke `/masuk` dan halaman terlindung tidak bisa dibuka.
 
 Persiapan sekali:
 
@@ -127,6 +129,12 @@ Setiap run: migrasi diterapkan dan basis data e2e **diisi ulang** dengan data fi
 (port 3101) dan web (port 5183) dijalankan khusus untuk uji, jadi tidak mengganggu `npm run dev`.
 Laporan kegagalan (tangkapan layar, trace) ada di `apps/e2e/test-results/`; buka trace dengan
 `npx playwright show-trace <berkas trace.zip>`.
+
+## CI
+
+`.github/workflows/ci.yml` menjalankan lint, typecheck, test, dan e2e pada setiap push dan pull
+request, dengan layanan MySQL 8 di runner. Tidak memakai rahasia: `.env` disusun dari nama
+variabel di `.env.example` dengan nilai khusus CI, dan `SESSION_SECRET` dibuat acak tiap run.
 
 ## Struktur
 

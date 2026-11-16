@@ -249,26 +249,28 @@ model KehadiranSiswa {
 // ─────────────────── Rekap dan penilaian ───────────────────
 
 model RekapKehadiranGuru {
-  id                   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  guru_id              BigInt    @db.UnsignedBigInt
+  id                          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  guru_id                     BigInt    @db.UnsignedBigInt
   /// Tahun kalender dari Senin pekan itu.
-  tahun                Int       @db.UnsignedSmallInt
-  minggu_ke            Int       @db.UnsignedSmallInt
+  tahun                       Int       @db.UnsignedSmallInt
+  minggu_ke                   Int       @db.UnsignedSmallInt
   /// Senin.
-  tanggal_mulai        DateTime  @db.Date
+  tanggal_mulai               DateTime  @db.Date
   /// Hari efektif terakhir.
-  tanggal_selesai      DateTime  @db.Date
-  total_jam_wajib      Int       @db.UnsignedInt
-  total_jam_hadir      Int       @db.UnsignedInt
-  persentase_kehadiran Decimal   @db.Decimal(5, 2)
+  tanggal_selesai             DateTime  @db.Date
+  total_jam_wajib             Int       @db.UnsignedInt
+  total_jam_hadir             Int       @db.UnsignedInt
+  persentase_kehadiran        Decimal   @db.Decimal(5, 2)
   /// Dikoreksi manual: sinkron dan hitung ulang otomatis melewati baris ini
   /// kecuali admin memilih timpa_koreksi.
-  dikoreksi_manual     Boolean   @default(false)
-  alasan_koreksi       String?   @db.Text
-  dikoreksi_oleh       BigInt?   @db.UnsignedBigInt
-  dikoreksi_pada       DateTime?
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
+  dikoreksi_manual            Boolean   @default(false)
+  alasan_koreksi              String?   @db.Text
+  dikoreksi_oleh              BigInt?   @db.UnsignedBigInt
+  dikoreksi_pada              DateTime?
+  /// Jumlah catatan kehadiran guru itu pada pekan ini saat dikoreksi (deteksi tambah/hapus).
+  jumlah_catatan_saat_koreksi Int?      @db.UnsignedInt
+  created_at                  DateTime  @default(now())
+  updated_at                  DateTime  @updatedAt
 
   guru       Guru  @relation(fields: [guru_id], references: [id], onDelete: Restrict)
   pengoreksi User? @relation(fields: [dikoreksi_oleh], references: [id], onDelete: Restrict)

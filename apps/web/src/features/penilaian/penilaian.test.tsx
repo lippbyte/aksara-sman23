@@ -52,14 +52,27 @@ function daftar<T>(
   data: T[],
   jendela = JENDELA_BUKA,
   pekan_belum_disinkron: DaftarPenilaian<T>['pekan_belum_disinkron'] = [],
+  pekan_rekap_sebagian: DaftarPenilaian<T>['pekan_rekap_sebagian'] = [],
 ): DaftarPenilaian<T> {
   return {
     data,
     meta: { page: 1, pageSize: 20, total: data.length },
     jendela,
     pekan_belum_disinkron,
+    pekan_rekap_sebagian,
   };
 }
+
+const SEBAGIAN: DaftarPenilaian<unknown>['pekan_rekap_sebagian'] = [
+  {
+    minggu_ke: 4,
+    tahun: 2026,
+    tanggal_mulai: '2026-11-09',
+    tanggal_selesai: '2026-11-13',
+    terekap: 10,
+    jumlah_guru: 12,
+  },
+];
 
 const BELUM: DaftarPenilaian<unknown>['pekan_belum_disinkron'] = [
   { minggu_ke: 5, tahun: 2026, tanggal_mulai: '2026-11-16', tanggal_selesai: '2026-11-20' },
@@ -394,5 +407,36 @@ describe('Peringatan pekan di Penilaian Kinerja', () => {
       'href',
       '/rekap-kehadiran',
     );
+  });
+});
+
+describe('Peringatan pekan gabungan', () => {
+  it('belum disinkron + sebagian → satu kotak, satu judul, dua rincian', async () => {
+    pasangApiTiruan('manajemen_guru', (url) =>
+      url.includes('/penilaian-kinerja?')
+        ? { body: daftar(KINERJA, JENDELA_BUKA, BELUM, SEBAGIAN) }
+        : undefined,
+    );
+    tampilkanApp('/penilaian-kinerja?bulan=11&tahun=2026');
+    const judul = await screen.findByText('3 pekan bulan ini belum disinkron lengkap');
+    const kotak = judul.closest('[role=status]');
+    expect(
+      screen.getAllByRole('status').filter((el) => el.textContent?.includes('pekan bulan ini')),
+    ).toHaveLength(1);
+    expect(kotak).toHaveTextContent('Belum disinkron: Pekan 5 (16–20 Nov), Pekan 6 (23–27 Nov).');
+    expect(kotak).toHaveTextContent('Baru sebagian: Pekan 4 (9–13 Nov), 10 dari 12 guru.');
+  });
+
+  it('hanya sebagian → judul "baru disinkron sebagian"', async () => {
+    pasangApiTiruan('guru_penilai', (url) =>
+      url.includes('/penilaian-mgmp?')
+        ? { body: daftar([], JENDELA_BUKA, [], SEBAGIAN) }
+        : undefined,
+    );
+    tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
+    expect(
+      await screen.findByText('1 pekan bulan ini baru disinkron sebagian'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Belum disinkron:/)).not.toBeInTheDocument();
   });
 });
