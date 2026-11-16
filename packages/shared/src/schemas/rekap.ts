@@ -116,6 +116,11 @@ export interface Rekap {
   alasan_koreksi: string | null;
   nama_pengoreksi: string | null;
   dikoreksi_pada: string | null;
+  /**
+   * Baris terkoreksi yang catatan kehadiran gurunya pada pekan itu dibuat/diubah setelah
+   * dikoreksi. Hanya penanda; rekap tidak dihitung ulang otomatis.
+   */
+  berubah_sejak_koreksi: boolean;
   updated_at: string;
 }
 

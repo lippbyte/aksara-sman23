@@ -1,4 +1,4 @@
-import type { KehadiranGuruMgmp, Periode } from '@sms/shared';
+import { kelasBerjadwalPerMgmp, type KehadiranGuruMgmp, type Periode } from '@sms/shared';
 import { Prisma } from '../../generated/prisma/client';
 import { keAngka, keNumber } from '../../lib/konversi';
 import { prisma, type Db } from '../../lib/prisma';
@@ -48,26 +48,55 @@ export async function kehadiranPerMgmp(
   return peta;
 }
 
-/** Skor siswa per kelas yang sudah diisi, dikelompokkan per MGMP. */
+/** Isian skor siswa per kelas, dikelompokkan per MGMP. */
 export async function skorSiswaPerMgmp(
   db: Db,
   p: Periode,
   mgmpIds?: readonly number[],
-): Promise<Map<number, number[]>> {
+): Promise<Map<number, { kelas_id: number; skor: number }[]>> {
   const rows = await db.penilaianMgmpSiswa.findMany({
     where: {
       bulan: p.bulan,
       tahun: p.tahun,
       ...(mgmpIds ? { mgmp_id: { in: [...mgmpIds] } } : {}),
     },
-    select: { mgmp_id: true, skor: true },
+    select: { mgmp_id: true, kelas_id: true, skor: true },
   });
-  const peta = new Map<number, number[]>();
+  const peta = new Map<number, { kelas_id: number; skor: number }[]>();
   for (const r of rows) {
     const id = keNumber(r.mgmp_id);
-    peta.set(id, [...(peta.get(id) ?? []), keAngka(r.skor)]);
+    peta.set(id, [
+      ...(peta.get(id) ?? []),
+      { kelas_id: keNumber(r.kelas_id), skor: keAngka(r.skor) },
+    ]);
   }
   return peta;
+}
+
+/**
+ * Kelas berjadwal per MGMP: kelas yang punya jadwal mengajar dari guru AKTIF anggota MGMP
+ * itu (satu query; pengelompokan oleh fungsi domain).
+ */
+export async function kelasBerjadwal(
+  db: Db,
+  mgmpIds?: readonly number[],
+): Promise<Map<number, number[]>> {
+  const rows = await db.jadwalMengajar.findMany({
+    where: {
+      guru: {
+        status: 'aktif',
+        mgmp_id: mgmpIds ? { in: [...mgmpIds] } : { not: null },
+      },
+    },
+    select: { kelas_id: true, guru: { select: { mgmp_id: true } } },
+  });
+  return kelasBerjadwalPerMgmp(
+    rows.flatMap((r) =>
+      r.guru.mgmp_id === null
+        ? []
+        : [{ mgmp_id: keNumber(r.guru.mgmp_id), kelas_id: keNumber(r.kelas_id) }],
+    ),
+  );
 }
 
 /** Skor siswa yang diisi satu kelas untuk semua MGMP pada periode itu. */
@@ -79,14 +108,13 @@ export async function skorKelas(p: Periode, kelasId: number): Promise<Map<number
   return new Map(rows.map((r) => [keNumber(r.mgmp_id), keAngka(r.skor)]));
 }
 
-export async function jumlahKelas(db: Db = prisma): Promise<number> {
-  return db.kelas.count();
-}
-
-/** Rincian skor siswa satu MGMP: semua kelas (atau satu kelas), terisi maupun belum. */
-export async function rincianSkorSiswa(p: Periode & { mgmp_id: number }, kelasId: number | null) {
+/** Kelas (semua, atau yang disebut) beserta isian skor siswa satu MGMP pada periode itu. */
+export async function rincianSkorSiswa(
+  p: Periode & { mgmp_id: number },
+  kelasIds: readonly number[] | null,
+) {
   return prisma.kelas.findMany({
-    where: kelasId === null ? {} : { id: kelasId },
+    where: kelasIds === null ? {} : { id: { in: [...kelasIds] } },
     select: {
       id: true,
       nama_kelas: true,
@@ -161,12 +189,7 @@ export async function daftar(p: Periode) {
         where: { bulan: p.bulan, tahun: p.tahun },
         include: { penilai: { select: { name: true } } },
       },
-      _count: {
-        select: {
-          guru: { where: { status: 'aktif' } },
-          penilaian_siswa: { where: { bulan: p.bulan, tahun: p.tahun } },
-        },
-      },
+      _count: { select: { guru: { where: { status: 'aktif' } } } },
     },
     orderBy: { nama_mapel: 'asc' },
   });

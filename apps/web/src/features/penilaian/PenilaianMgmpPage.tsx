@@ -23,6 +23,7 @@ import {
 } from './api';
 import {
   InfoJendela,
+  PeringatanPekan,
   keSkor,
   LencanaPredikat,
   PilihPeriode,
@@ -32,6 +33,9 @@ import {
 
 /** "n dari m kelas" untuk skor siswa MGMP. */
 function KelasMengisi({ b }: { b: PenilaianMgmpBaris }) {
+  if (b.jumlah_kelas === 0) {
+    return <span className="text-xs text-ink-muted">Tidak ada kelas berjadwal</span>;
+  }
   return (
     <span className="text-xs text-ink-muted tabular-nums">
       {angka(b.kelas_terisi)} dari {angka(b.jumlah_kelas)} kelas
@@ -164,6 +168,12 @@ export function PenilaianMgmpPage() {
     <div>
       <PilihPeriode periode={periode} onUbah={atur} />
       <InfoJendela jendela={jendela} periode={periode} admin={admin} />
+      {!sekretaris && (
+        <PeringatanPekan
+          pekan={daftar.data?.pekan_belum_disinkron}
+          bolehRekap={user.role === 'admin' || user.role === 'manajemen_guru'}
+        />
+      )}
 
       {sekretaris ? (
         <p className="mb-3 text-xs text-ink-subtle">
@@ -200,7 +210,12 @@ export function PenilaianMgmpPage() {
         onCobaLagi={() => void daftar.refetch()}
         keterangan={`Penilaian MGMP ${label}`}
         barisSkeleton={3}
-        kosong={{ icon: UsersRound, pesan: 'Belum ada MGMP.' }}
+        kosong={{
+          icon: UsersRound,
+          pesan: sekretaris
+            ? `Belum ada MGMP yang gurunya mengajar di kelas ${user.nama_kelas ?? 'Anda'}.`
+            : 'Belum ada MGMP.',
+        }}
       />
 
       <ConfirmDialog
@@ -452,6 +467,11 @@ function DialogSkorSiswa({
                         </td>
                         <td className="px-3 py-2 text-ink-muted">
                           {k.nama_pengisi ?? 'Belum mengisi'}
+                          {!k.berjadwal && (
+                            <span className="block text-xs">
+                              Tanpa jadwal MGMP ini, tidak dihitung
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -472,11 +492,13 @@ function DialogSkorSiswa({
                 onChange={(e) => pilihKelas(e.target.value)}
               >
                 <option value="">Pilih kelas</option>
-                {kelas.map((k) => (
-                  <option key={k.kelas_id} value={k.kelas_id}>
-                    {k.nama_kelas}
-                  </option>
-                ))}
+                {kelas
+                  .filter((k) => k.berjadwal)
+                  .map((k) => (
+                    <option key={k.kelas_id} value={k.kelas_id}>
+                      {k.nama_kelas}
+                    </option>
+                  ))}
               </Select>
             </Field>
           )}

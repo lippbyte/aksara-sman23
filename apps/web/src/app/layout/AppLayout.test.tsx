@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { pasangApiTiruan, tampilkanApp } from '@/test/bantuan';
+import { pasangApiTiruan, penggunaUji, tampilkanApp } from '@/test/bantuan';
 import { judulHalaman, menuUntuk, NAV_ITEMS } from '../nav';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -110,6 +110,29 @@ describe('halaman masuk', () => {
     expect(await screen.findByText('Format email tidak valid.')).toBeInTheDocument();
     expect(screen.getByText('Kata sandi wajib diisi.')).toBeInTheDocument();
     expect(fetchTiruan.mock.calls.some(([url]) => String(url).endsWith('/auth/login'))).toBe(false);
+  });
+
+  // Catatan: bug "terpental kembali ke /masuk" (Fase 10) hanya muncul di browser nyata;
+  // penjaganya adalah e2e (`apps/e2e`, helper `masuk`). Test ini memeriksa alur dasarnya.
+  it('login berhasil masuk ke dashboard', async () => {
+    const sesi = {
+      user: penggunaUji('manajemen_guru'),
+      sekolah: { nama_sekolah: 'SMA Contoh Fiktif', logo_url: null, tahun_ajaran: '2026/2027' },
+    };
+    pasangApiTiruan(null, (url) =>
+      url.endsWith('/auth/login') ? { body: { data: sesi } } : undefined,
+    );
+    const { router } = tampilkanApp('/masuk');
+    fireEvent.change(await screen.findByLabelText('Email'), {
+      target: { value: 'manajemen@contoh.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Kata sandi'), { target: { value: 'kata-sandi-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Masuk' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+    // Tetap di dashboard setelah render ulang.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(router.state.location.pathname).toBe('/');
+    expect(screen.queryByText('Masuk untuk melanjutkan.')).not.toBeInTheDocument();
   });
 
   it('kredensial salah menampilkan pesan dari server', async () => {

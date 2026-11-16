@@ -440,7 +440,7 @@ describe('penilaian MGMP', () => {
     expect(tanpaKelas.status).toBe(400);
     expect(
       (await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: 99999999, skor: 90 })).status,
-    ).toBe(400);
+    ).toBe(422);
 
     const res = await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: kelasX2, skor: 90 });
     expect(res.status).toBe(200);
@@ -518,6 +518,119 @@ describe('penilaian MGMP', () => {
     });
   });
 
+  it('m = kelas yang punya jadwal dari guru aktif MGMP itu', async () => {
+    const jadwal = await prisma.jadwalMengajar.findMany({
+      where: { guru: { mgmp_id: mgmpMat, status: 'aktif' } },
+      select: { kelas_id: true },
+    });
+    const harapan = new Set(jadwal.map((j) => keNumber(j.kelas_id))).size;
+    const baris = (await admin.get(`${PM}?bulan=11&tahun=2026`)).body.data.find(
+      (b: { mgmp_id: number }) => b.mgmp_id === mgmpMat,
+    );
+    expect(harapan).toBeGreaterThan(0);
+    expect(baris.jumlah_kelas).toBe(harapan);
+  });
+
+  it('kasus tepi: MGMP tanpa jadwal sama sekali; kelas tanpa jadwal MGMP itu', async () => {
+    await aturHariIni('2026-11-28');
+    const tanpaJadwal = await prisma.mgmp.create({ data: { nama_mapel: 'Uji Tanpa Jadwal' } });
+    const satuKelas = await prisma.mgmp.create({ data: { nama_mapel: 'Uji Satu Kelas' } });
+    const guruUji = await prisma.guru.create({
+      data: {
+        kode_guru: 'UJI-MGMP-3',
+        nama_guru: 'Guru Satu Kelas Contoh',
+        mata_pelajaran: 'Uji Satu Kelas',
+        mgmp_id: satuKelas.id,
+        jadwal: { create: { kelas_id: kelasX2, hari: 2, jam_ke: 12, total_jam_mengajar: 1 } },
+      },
+    });
+    const idTanpa = keNumber(tanpaJadwal.id);
+    const idSatu = keNumber(satuKelas.id);
+    try {
+      // Admin: 0 dari 0 kelas; 0 dari 1 kelas.
+      const daftarAdmin = (await admin.get(`${PM}?bulan=11&tahun=2026`)).body.data;
+      const cari = (id: number) => daftarAdmin.find((b: { mgmp_id: number }) => b.mgmp_id === id);
+      expect(cari(idTanpa)).toMatchObject({ kelas_terisi: 0, jumlah_kelas: 0, skor_siswa: null });
+      expect(cari(idSatu)).toMatchObject({ kelas_terisi: 0, jumlah_kelas: 1 });
+
+      // Sekretaris X-1: kedua MGMP tidak tampil; mengisi atau melihat rincian → 403.
+      const daftarSek = (await sekretaris.get(`${PM}?bulan=11&tahun=2026`)).body.data;
+      const terlihat = daftarSek.map((b: { mgmp_id: number }) => b.mgmp_id);
+      expect(terlihat).toContain(mgmpMat);
+      expect(terlihat).not.toContain(idTanpa);
+      expect(terlihat).not.toContain(idSatu);
+      for (const id of [idTanpa, idSatu]) {
+        const isi = await sekretaris.put(`${PM}/skor-siswa`, {
+          mgmp_id: id,
+          bulan: 11,
+          tahun: 2026,
+          skor: 70,
+        });
+        expect(isi.status).toBe(403);
+        expect(isi.body.error.message).toBe('Guru MGMP ini tidak punya jadwal di kelas Anda.');
+        expect(
+          (await sekretaris.get(`${PM}/skor-siswa?mgmp_id=${id}&bulan=11&tahun=2026`)).status,
+        ).toBe(403);
+      }
+      // Tetap 403 di luar jendela (akses diperiksa lebih dulu).
+      await aturHariIni('2026-11-20');
+      expect(
+        (
+          await sekretaris.put(`${PM}/skor-siswa`, {
+            mgmp_id: idSatu,
+            bulan: 11,
+            tahun: 2026,
+            skor: 70,
+          })
+        ).status,
+      ).toBe(403);
+      await aturHariIni('2026-11-28');
+
+      // Peran lain: kelas tanpa jadwal → 422; kelas berjadwal → 200.
+      const dasar = { mgmp_id: idSatu, bulan: 11, tahun: 2026 };
+      expect(
+        (await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: kelasX1, skor: 60 })).status,
+      ).toBe(422);
+      expect(
+        (
+          await penilai.put(`${PM}/skor-siswa`, {
+            ...dasar,
+            mgmp_id: idTanpa,
+            kelas_id: kelasX1,
+            skor: 60,
+          })
+        ).status,
+      ).toBe(422);
+      const ok = await penilai.put(`${PM}/skor-siswa`, { ...dasar, kelas_id: kelasX2, skor: 70 });
+      expect(ok.status).toBe(200);
+      expect(ok.body.data).toMatchObject({ kelas_terisi: 1, jumlah_kelas: 1, skor_siswa: 70 });
+
+      // Isian lama dari kelas yang kini tak berjadwal: tampil di rincian, tidak dihitung.
+      const pengisi = await prisma.user.findFirstOrThrow({ where: { role: 'admin' } });
+      await prisma.penilaianMgmpSiswa.create({
+        data: { ...dasar, kelas_id: kelasX1, skor: 10, diisi_oleh: pengisi.id },
+      });
+      const rinci = (await admin.get(`${PM}/skor-siswa?mgmp_id=${idSatu}&bulan=11&tahun=2026`)).body
+        .data;
+      expect(rinci).toEqual([
+        expect.objectContaining({ nama_kelas: 'X-1', skor: 10, berjadwal: false }),
+        expect.objectContaining({ nama_kelas: 'X-2', skor: 70, berjadwal: true }),
+      ]);
+      expect((await admin.post(`${PM}/sync`, { bulan: 11, tahun: 2026 })).status).toBe(200);
+      const setelah = (await admin.get(`${PM}?bulan=11&tahun=2026`)).body.data.find(
+        (b: { mgmp_id: number }) => b.mgmp_id === idSatu,
+      );
+      expect(setelah).toMatchObject({ kelas_terisi: 1, jumlah_kelas: 1, skor_siswa: 70 });
+    } finally {
+      const ids = [tanpaJadwal.id, satuKelas.id];
+      await prisma.penilaianMgmpSiswa.deleteMany({ where: { mgmp_id: { in: ids } } });
+      await prisma.penilaianMgmp.deleteMany({ where: { mgmp_id: { in: ids } } });
+      await prisma.jadwalMengajar.deleteMany({ where: { guru_id: guruUji.id } });
+      await prisma.guru.delete({ where: { id: guruUji.id } });
+      await prisma.mgmp.deleteMany({ where: { id: { in: ids } } });
+    }
+  });
+
   it('ekspor CSV MGMP', async () => {
     const res = await admin.get(`${PM}/export?bulan=11&tahun=2026`);
     expect(res.status).toBe(200);
@@ -529,5 +642,41 @@ describe('penilaian MGMP', () => {
     const mat = garis.find((g) => g.startsWith('Matematika'));
     expect(mat).toContain('Rapat rutin (contoh)');
     expect(mat).toContain(`2 dari ${await prisma.kelas.count()}`);
+  });
+});
+
+describe('peringatan pekan belum disinkron', () => {
+  it('pekan November yang sudah selesai tanpa rekap dilaporkan; tidak dihitung 0', async () => {
+    // Pastikan pekan 6 (23–27 Nov) belum punya rekap; pekan 3 (2–6 Nov) sudah.
+    await prisma.rekapKehadiranGuru.deleteMany({ where: { tahun: 2026, minggu_ke: 6 } });
+    expect(
+      await prisma.rekapKehadiranGuru.count({ where: { tahun: 2026, minggu_ke: 3 } }),
+    ).toBeGreaterThan(0);
+    await aturHariIni('2026-11-28');
+
+    for (const url of [`${PK}?bulan=11&tahun=2026`, `${PM}?bulan=11&tahun=2026`]) {
+      const res = await manajemen.get(url);
+      expect(res.status).toBe(200);
+      const nomor =
+        res.body.data.length >= 0 &&
+        res.body.pekan_belum_disinkron.map((p: { minggu_ke: number }) => p.minggu_ke);
+      expect(nomor).toContain(6);
+      expect(nomor).not.toContain(3);
+      // Pekan 7 (30 Nov – 4 Des) belum selesai.
+      expect(nomor).not.toContain(7);
+    }
+
+    // Skor kehadiran hanya dari pekan yang punya rekap (bukan dirata-rata dengan 0).
+    await penilai.post(`${PK}/sync`, { bulan: 11, tahun: 2026 });
+    const daftar = await manajemen.get(`${PK}?bulan=11&tahun=2026&pageSize=100`);
+    const g = guru[0]!;
+    const baris = daftar.body.data.find((b: { guru_id: number }) => b.guru_id === g.id);
+    expect(baris.skor_kehadiran).toBe(rataRataBulanan(await rekapGuru(g.id), 11, 2026));
+  });
+
+  it('bulan berjalan tanpa pekan yang selesai → daftar kosong', async () => {
+    await aturHariIni('2026-11-03');
+    const res = await manajemen.get(`${PK}?bulan=12&tahun=2026`);
+    expect(res.body.pekan_belum_disinkron).toEqual([]);
   });
 });

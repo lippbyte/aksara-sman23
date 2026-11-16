@@ -1,8 +1,11 @@
 import {
   jendelaPenilaian,
+  pekanBelumDisinkron,
+  pekanDalamBulan,
   type JendelaPenilaian,
   type PenggunaSesi,
   type Periode,
+  type RentangPekan,
 } from '@sms/shared';
 import { catatAudit, type KonteksAudit } from './audit';
 import { businessRule } from './errors';
@@ -57,6 +60,24 @@ export function periksaJendela(
     `Jendela penilaian ${namaPeriode(p)} tertutup. Pengisian dibuka ${j.buka} s.d. ${j.tutup}.`,
     { jendela: j },
   );
+}
+
+/**
+ * Pekan bulan periode yang sudah selesai tetapi belum punya rekap sama sekali (satu query
+ * agregat). Pemilihan pekan dari fungsi domain.
+ */
+export async function pekanBelumDisinkronPeriode(
+  db: Db,
+  p: Periode,
+  pengaturan: PengaturanSekolah,
+): Promise<RentangPekan[]> {
+  const pekan = pekanDalamBulan(p.bulan, p.tahun, pengaturan.pekan);
+  if (pekan.length === 0) return [];
+  const tersimpan = await db.rekapKehadiranGuru.groupBy({
+    by: ['tahun', 'minggu_ke'],
+    where: { OR: pekan.map((w) => ({ tahun: w.tahun, minggu_ke: w.minggu_ke })) },
+  });
+  return pekanBelumDisinkron(pekan, tersimpan, hariIni());
 }
 
 export async function catatDiLuarJendela(

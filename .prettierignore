@@ -10,3 +10,5 @@ AGENTS.md
 PROJECT-CONTEXT.md
 DESIGN.md
 PROMPT-REBUILD.md
+apps/e2e/test-results
+apps/e2e/playwright-report

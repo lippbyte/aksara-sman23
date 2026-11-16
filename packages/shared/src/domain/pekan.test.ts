@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   hitungMingguKe,
+  pekanBelumDisinkron,
+  pekanDalamBulan,
   pekanDariTanggal,
   rentangBeririsan,
   rentangPekan,
@@ -147,5 +149,71 @@ describe('rentangBeririsan', () => {
         { awal: '2026-06-01', akhir: '2026-06-28' },
       ),
     ).toBe(false);
+  });
+});
+
+describe('pekanDalamBulan', () => {
+  const nomor = (b: number, t: number, s = SENIN_JUMAT) =>
+    pekanDalamBulan(b, t, s).map((p) => p.minggu_ke);
+
+  it('bulan pertama: tanggal sebelum awal masuk pekan 1', () => {
+    expect(nomor(1, 2026)).toEqual([1, 2, 3]);
+  });
+
+  it('pekan lintas bulan ikut di kedua bulan', () => {
+    // Pekan 12 = 30 Mar – 3 Apr.
+    expect(nomor(3, 2026)).toEqual([8, 9, 10, 11, 12]);
+    expect(nomor(4, 2026)).toEqual([12, 13, 14, 15, 16]);
+  });
+
+  it('pekan yang hari efektifnya di bulan sebelumnya tidak ikut', () => {
+    // Senin 26 Jan – Jumat 30 Jan tidak menyentuh Februari.
+    expect(nomor(2, 2026)).toEqual([4, 5, 6, 7]);
+  });
+
+  it('bulan sebelum tanggal awal pekan → kosong', () => {
+    expect(pekanDalamBulan(12, 2025, SENIN_JUMAT)).toEqual([]);
+  });
+
+  it('pekan lintas tahun membawa tahun dari Senin-nya', () => {
+    const s: PengaturanPekan = { tanggal_awal_pekan: '2026-12-28', hari_efektif: [1, 2, 3, 4, 5] };
+    expect(pekanDalamBulan(1, 2027, s)[0]).toEqual({
+      minggu_ke: 1,
+      tahun: 2026,
+      tanggal_mulai: '2026-12-28',
+      tanggal_selesai: '2027-01-01',
+    });
+  });
+});
+
+describe('pekanBelumDisinkron', () => {
+  const maret = pekanDalamBulan(3, 2026, SENIN_JUMAT);
+  const tersimpan = [
+    { tahun: 2026, minggu_ke: 8 },
+    { tahun: 2026, minggu_ke: 10 },
+  ];
+
+  it('hanya pekan yang sudah selesai dan belum punya rekap', () => {
+    // Jumat 27 Mar (akhir pekan 11) belum lewat.
+    expect(pekanBelumDisinkron(maret, tersimpan, '2026-03-27').map((p) => p.minggu_ke)).toEqual([
+      9,
+    ]);
+    expect(pekanBelumDisinkron(maret, tersimpan, '2026-03-28').map((p) => p.minggu_ke)).toEqual([
+      9, 11,
+    ]);
+  });
+
+  it('semua pekan tersinkron atau belum ada yang selesai → kosong', () => {
+    const semua = maret.map((p) => ({ tahun: p.tahun, minggu_ke: p.minggu_ke }));
+    expect(pekanBelumDisinkron(maret, semua, '2026-12-31')).toEqual([]);
+    expect(pekanBelumDisinkron(maret, [], '2026-03-02')).toEqual([]);
+  });
+
+  it('tahun ikut dibandingkan', () => {
+    expect(
+      pekanBelumDisinkron(maret, [{ tahun: 2027, minggu_ke: 8 }], '2026-03-07').map(
+        (p) => p.minggu_ke,
+      ),
+    ).toEqual([8]);
   });
 });

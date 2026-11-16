@@ -9,6 +9,8 @@ import {
   skorAkhirKinerja,
   skorAkhirMgmp,
   skorSiswaMgmp,
+  kelasBerjadwalPerMgmp,
+  ringkasanSkorSiswaMgmp,
 } from './skor';
 
 const BOBOT = BOBOT_DEFAULT.kinerja;
@@ -225,5 +227,62 @@ describe('jendelaPenilaian', () => {
 
   it('periode bulan lain tidak terbuka walau hari ini akhir bulan', () => {
     expect(jendelaPenilaian('2026-11-30', 10, 2026, 3).terbuka).toBe(false);
+  });
+});
+
+describe('kelasBerjadwalPerMgmp', () => {
+  it('kelas unik terurut per MGMP; MGMP tanpa jadwal tidak muncul', () => {
+    const peta = kelasBerjadwalPerMgmp([
+      { mgmp_id: 1, kelas_id: 3 },
+      { mgmp_id: 1, kelas_id: 1 },
+      { mgmp_id: 1, kelas_id: 3 },
+      { mgmp_id: 2, kelas_id: 2 },
+    ]);
+    expect(peta.get(1)).toEqual([1, 3]);
+    expect(peta.get(2)).toEqual([2]);
+    expect(peta.get(9)).toBeUndefined();
+    expect(kelasBerjadwalPerMgmp([]).size).toBe(0);
+  });
+});
+
+describe('ringkasanSkorSiswaMgmp', () => {
+  it('n dari m: hanya kelas berjadwal; rata-rata kelas yang mengisi', () => {
+    expect(
+      ringkasanSkorSiswaMgmp(
+        [1, 2, 3],
+        [
+          { kelas_id: 1, skor: 80 },
+          { kelas_id: 3, skor: 90 },
+        ],
+      ),
+    ).toEqual({ skor_siswa: 85, kelas_terisi: 2, jumlah_kelas: 3 });
+  });
+
+  it('isian dari kelas tanpa jadwal MGMP itu diabaikan', () => {
+    expect(
+      ringkasanSkorSiswaMgmp(
+        [1],
+        [
+          { kelas_id: 1, skor: 70 },
+          { kelas_id: 5, skor: 10 },
+        ],
+      ),
+    ).toEqual({ skor_siswa: 70, kelas_terisi: 1, jumlah_kelas: 1 });
+  });
+
+  it('MGMP tanpa jadwal sama sekali → 0 dari 0 kelas, skor 0', () => {
+    expect(ringkasanSkorSiswaMgmp([], [{ kelas_id: 1, skor: 90 }])).toEqual({
+      skor_siswa: 0,
+      kelas_terisi: 0,
+      jumlah_kelas: 0,
+    });
+  });
+
+  it('belum ada kelas yang mengisi → skor 0', () => {
+    expect(ringkasanSkorSiswaMgmp([1, 2], [])).toEqual({
+      skor_siswa: 0,
+      kelas_terisi: 0,
+      jumlah_kelas: 2,
+    });
   });
 });

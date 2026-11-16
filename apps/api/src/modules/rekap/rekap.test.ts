@@ -393,6 +393,68 @@ describe('koreksi manual', () => {
     expect(await ambilPekan2()).toMatchObject({ total_jam_wajib: 3, dikoreksi_manual: true });
   });
 
+  it('lencana "berubah sejak dikoreksi": hanya bila ada catatan pekan itu setelah koreksi; rekap tidak dihitung ulang', async () => {
+    const cariBaris = async () =>
+      (await manajemen.get(`${R}?minggu_ke=2&tahun=2026&guru_id=${guruSabtu}`)).body.data[0];
+    expect(await cariBaris()).toMatchObject({
+      dikoreksi_manual: true,
+      berubah_sejak_koreksi: false,
+    });
+
+    const kelas = await prisma.kelas.findFirstOrThrow({ where: { nama_kelas: 'XII-2' } });
+    const admUser = await prisma.user.findFirstOrThrow({ where: { role: 'admin' } });
+    // Catatan pekan lain tidak memicu lencana.
+    await prisma.kehadiran.create({
+      data: {
+        tanggal: keDate('2026-11-16'),
+        guru_id: guruSabtu,
+        kelas_id: kelas.id,
+        jam_ke: 11,
+        lama_jam: 2,
+        status_kehadiran: 'Tidak_Hadir',
+        status_tugas: 'Ada',
+        created_by: admUser.id,
+      },
+    });
+    expect((await cariBaris()).berubah_sejak_koreksi).toBe(false);
+
+    // Catatan pekan 2 (Senin 26 Okt) yang dibuat setelah koreksi.
+    await prisma.kehadiran.create({
+      data: {
+        tanggal: keDate('2026-10-26'),
+        guru_id: guruSabtu,
+        kelas_id: kelas.id,
+        jam_ke: 11,
+        lama_jam: 2,
+        status_kehadiran: 'Tidak_Hadir',
+        status_tugas: 'Tidak_Ada',
+        created_by: admUser.id,
+      },
+    });
+    const baris = await cariBaris();
+    expect(baris).toMatchObject({
+      berubah_sejak_koreksi: true,
+      // Tidak dihitung ulang otomatis.
+      total_jam_wajib: 3,
+      total_jam_hadir: 2,
+      persentase_kehadiran: 66.67,
+    });
+    // Baris yang tidak dikoreksi tidak pernah berlencana.
+    const lain = await manajemen.get(`${R}?minggu_ke=2&tahun=2026&pageSize=100`);
+    for (const r of lain.body.data.filter(
+      (x: { dikoreksi_manual: boolean }) => !x.dikoreksi_manual,
+    ))
+      expect(r.berubah_sejak_koreksi).toBe(false);
+
+    // Koreksi ulang → lencana hilang.
+    const ulang = await admin.put(`${R}/${baris.id}`, {
+      total_jam_wajib: 3,
+      total_jam_hadir: 2,
+      alasan_koreksi: 'Diperiksa ulang (contoh)',
+    });
+    expect(ulang.body.data.berubah_sejak_koreksi).toBe(false);
+  });
+
   it('timpa_koreksi: manajemen → 403; admin menimpa, tanda koreksi dihapus, tercatat di log', async () => {
     const tolak = await manajemen.post(`${R}/sync`, {
       minggu_ke: 2,

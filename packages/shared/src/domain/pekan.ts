@@ -1,5 +1,12 @@
 import { HARI_EFEKTIF_DEFAULT } from '../constants';
-import { seninDari, selisihHari, tahunDari, tambahHari, type TanggalISO } from './tanggal';
+import {
+  rentangBulan,
+  seninDari,
+  selisihHari,
+  tahunDari,
+  tambahHari,
+  type TanggalISO,
+} from './tanggal';
 
 export interface PengaturanPekan {
   /** `sekolah_settings.tanggal_awal_pekan`; dinormalkan ke Senin pekannya. */
@@ -80,6 +87,42 @@ export function rentangPekan(
 export function pekanDariTanggal(tanggal: TanggalISO, settings: PengaturanPekan): RentangPekan {
   const mingguKe = hitungMingguKe(tanggal, settings.tanggal_awal_pekan);
   return rentangPekan(mingguKe, tahunPekan(mingguKe, settings.tanggal_awal_pekan), settings);
+}
+
+/**
+ * Pekan yang beririsan dengan bulan (Senin s.d. hari efektif terakhir menyentuh bulan itu).
+ * Hanya pekan sejak `tanggal_awal_pekan`; bulan yang seluruhnya sebelum tanggal itu → kosong.
+ */
+export function pekanDalamBulan(
+  bulan: number,
+  tahun: number,
+  settings: PengaturanPekan,
+): RentangPekan[] {
+  const b = rentangBulan(bulan, tahun);
+  const awal = settings.tanggal_awal_pekan;
+  if (b.akhir < seninDari(awal)) return [];
+  const hasil: RentangPekan[] = [];
+  for (let m = hitungMingguKe(b.awal, awal); m <= hitungMingguKe(b.akhir, awal); m++) {
+    const p = rentangPekan(m, tahunPekan(m, awal), settings);
+    if (rentangBeririsan({ awal: p.tanggal_mulai, akhir: p.tanggal_selesai }, b)) hasil.push(p);
+  }
+  return hasil;
+}
+
+/**
+ * Pekan yang sudah selesai (hari efektif terakhirnya sebelum `hariIni`) tetapi belum punya
+ * rekap sama sekali. Pekan ini tidak ikut dirata-rata (bukan dihitung 0); halaman penilaian
+ * menampilkan peringatan.
+ *
+ * ASUMSI: pekan dianggap "sudah disinkron" bila punya minimal satu baris rekap.
+ */
+export function pekanBelumDisinkron(
+  pekan: readonly RentangPekan[],
+  tersimpan: readonly { tahun: number; minggu_ke: number }[],
+  hariIni: TanggalISO,
+): RentangPekan[] {
+  const ada = new Set(tersimpan.map((t) => `${t.tahun}-${t.minggu_ke}`));
+  return pekan.filter((p) => p.tanggal_selesai < hariIni && !ada.has(`${p.tahun}-${p.minggu_ke}`));
 }
 
 /** Dua rentang tanggal inklusif beririsan? */

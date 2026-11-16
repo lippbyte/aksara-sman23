@@ -2,7 +2,7 @@ import {
   predikatMgmp,
   skorAkhirMgmp,
   skorKehadiranMgmp,
-  skorSiswaMgmp,
+  ringkasanSkorSiswaMgmp,
   type DaftarPenilaian,
   type HasilSyncPenilaian,
   type PenggunaSesi,
@@ -15,14 +15,21 @@ import {
 } from '@sms/shared';
 import { catatAudit, type KonteksAudit } from '../../lib/audit';
 import { batalkanCacheDashboard } from '../../lib/cache';
-import { badRequest, forbidden } from '../../lib/errors';
+import { badRequest, businessRule, forbidden } from '../../lib/errors';
 import { keAngka, keNumber } from '../../lib/konversi';
-import { catatDiLuarJendela, infoJendela, namaPeriode, periksaJendela } from '../../lib/penilaian';
+import {
+  catatDiLuarJendela,
+  infoJendela,
+  namaPeriode,
+  pekanBelumDisinkronPeriode,
+  periksaJendela,
+} from '../../lib/penilaian';
 import { prisma, type Tx } from '../../lib/prisma';
 import { ambilPengaturan, type PengaturanSekolah } from '../../lib/sekolah';
 import * as repo from './repo';
 
 type BarisMgmp = Awaited<ReturnType<typeof repo.daftar>>[number];
+type IsianKelas = { kelas_id: number; skor: number }[];
 
 /**
  * Sekretaris kelas hanya berurusan dengan skor siswa kelasnya (§4, §6.5).
@@ -32,23 +39,24 @@ type BarisMgmp = Awaited<ReturnType<typeof repo.daftar>>[number];
 function keBaris(
   m: BarisMgmp,
   user: PenggunaSesi,
-  jumlahKelas: number,
+  kelas: readonly number[],
+  isian: IsianKelas,
   skorKelasSaya: Map<number, number> | null,
 ): PenilaianMgmpBaris {
   const p = m.penilaian[0];
   const sudah = p !== undefined && p.dinilai_oleh !== null;
   const akhir = p ? keAngka(p.skor_akhir) : null;
   const terbatas = user.role === 'sekretaris_kelas';
-  const terisi = m._count.penilaian_siswa;
+  const r = ringkasanSkorSiswaMgmp(kelas, isian);
   return {
     mgmp_id: keNumber(m.id),
     nama_mapel: m.nama_mapel,
     jumlah_guru_aktif: m._count.guru,
     id: p ? keNumber(p.id) : null,
     skor_kehadiran: p && !terbatas ? keAngka(p.skor_kehadiran) : null,
-    skor_siswa: p && terisi > 0 && !terbatas ? keAngka(p.skor_siswa) : null,
-    kelas_terisi: terisi,
-    jumlah_kelas: jumlahKelas,
+    skor_siswa: p && r.kelas_terisi > 0 && !terbatas ? keAngka(p.skor_siswa) : null,
+    kelas_terisi: r.kelas_terisi,
+    jumlah_kelas: r.jumlah_kelas,
     skor_kelas_saya: terbatas ? (skorKelasSaya?.get(keNumber(m.id)) ?? null) : null,
     skor_administrasi: p && sudah && !terbatas ? keAngka(p.skor_administrasi) : null,
     skor_akhir: sudah && !terbatas ? akhir : null,
@@ -60,15 +68,27 @@ function keBaris(
   };
 }
 
+/**
+ * Baris daftar MGMP. Untuk sekretaris hanya MGMP yang gurunya punya jadwal di kelasnya
+ * (§4); MGMP lain tidak tampil.
+ */
 async function susunBaris(p: Periode, user: PenggunaSesi): Promise<PenilaianMgmpBaris[]> {
-  const [rows, jumlahKelas, skorSaya] = await Promise.all([
+  const sekretaris = user.role === 'sekretaris_kelas';
+  const [rows, kelas, isian, skorSaya] = await Promise.all([
     repo.daftar(p),
-    repo.jumlahKelas(),
-    user.role === 'sekretaris_kelas' && user.kelas_id !== null
-      ? repo.skorKelas(p, user.kelas_id)
-      : Promise.resolve(null),
+    repo.kelasBerjadwal(prisma),
+    repo.skorSiswaPerMgmp(prisma, p),
+    sekretaris && user.kelas_id !== null ? repo.skorKelas(p, user.kelas_id) : Promise.resolve(null),
   ]);
-  return rows.map((m) => keBaris(m, user, jumlahKelas, skorSaya));
+  return rows
+    .filter(
+      (m) =>
+        !sekretaris ||
+        (user.kelas_id !== null && (kelas.get(keNumber(m.id)) ?? []).includes(user.kelas_id)),
+    )
+    .map((m) =>
+      keBaris(m, user, kelas.get(keNumber(m.id)) ?? [], isian.get(keNumber(m.id)) ?? [], skorSaya),
+    );
 }
 
 export async function daftar(
@@ -76,46 +96,66 @@ export async function daftar(
   user: PenggunaSesi,
 ): Promise<DaftarPenilaian<PenilaianMgmpBaris>> {
   const pengaturan = await ambilPengaturan(prisma);
-  const rows = await susunBaris(p, user);
+  const [rows, belum] = await Promise.all([
+    susunBaris(p, user),
+    pekanBelumDisinkronPeriode(prisma, p, pengaturan),
+  ]);
   return {
     data: rows,
     meta: { page: 1, pageSize: rows.length, total: rows.length },
     jendela: infoJendela(p, pengaturan),
+    pekan_belum_disinkron: belum,
   };
 }
 
-/** Rincian skor siswa per kelas untuk satu MGMP. Sekretaris hanya melihat kelasnya. */
+/** Sekretaris hanya untuk MGMP yang gurunya punya jadwal di kelasnya; selain itu 403. */
+function periksaKelasSekretaris(berjadwal: readonly number[], kelasId: number): void {
+  if (!berjadwal.includes(kelasId)) {
+    throw forbidden('Guru MGMP ini tidak punya jadwal di kelas Anda.');
+  }
+}
+
+/**
+ * Rincian skor siswa per kelas untuk satu MGMP: kelas berjadwal, ditambah kelas lain yang
+ * sudah punya isian (ditandai tidak dihitung). Sekretaris hanya melihat kelasnya.
+ */
 export async function rincianSkorSiswa(
   q: SkorSiswaMgmpQuery,
   kelasScope: number | null,
 ): Promise<SkorSiswaKelasBaris[]> {
-  const rows = await repo.rincianSkorSiswa(q, kelasScope);
-  return rows.map((k) => {
-    const s = k.penilaian_mgmp_siswa[0];
-    return {
-      kelas_id: keNumber(k.id),
-      nama_kelas: k.nama_kelas,
-      skor: s ? keAngka(s.skor) : null,
-      nama_pengisi: s?.pengisi.name ?? null,
-      updated_at: s ? s.updated_at.toISOString() : null,
-    };
-  });
+  const berjadwal = (await repo.kelasBerjadwal(prisma, [q.mgmp_id])).get(q.mgmp_id) ?? [];
+  if (kelasScope !== null) periksaKelasSekretaris(berjadwal, kelasScope);
+  const rows = await repo.rincianSkorSiswa(q, kelasScope === null ? null : [kelasScope]);
+  return rows
+    .filter((k) => berjadwal.includes(keNumber(k.id)) || k.penilaian_mgmp_siswa.length > 0)
+    .map((k) => {
+      const s = k.penilaian_mgmp_siswa[0];
+      return {
+        kelas_id: keNumber(k.id),
+        nama_kelas: k.nama_kelas,
+        skor: s ? keAngka(s.skor) : null,
+        nama_pengisi: s?.pengisi.name ?? null,
+        updated_at: s ? s.updated_at.toISOString() : null,
+        berjadwal: berjadwal.includes(keNumber(k.id)),
+      };
+    });
 }
 
-/** Skor otomatis satu MGMP: kehadiran (rekap guru) dan siswa (rata-rata per kelas). */
+/** Skor otomatis satu MGMP: kehadiran (rekap guru) dan siswa (rata-rata kelas berjadwal). */
 async function skorOtomatis(
   tx: Tx,
   mgmpId: number,
   p: Periode,
   pengaturan: PengaturanSekolah,
 ): Promise<{ skor_kehadiran: number; skor_siswa: number }> {
-  const [kehadiran, siswa] = await Promise.all([
+  const [kehadiran, siswa, kelas] = await Promise.all([
     repo.kehadiranPerMgmp(tx, p, pengaturan.pekan.hari_efektif, [mgmpId]),
     repo.skorSiswaPerMgmp(tx, p, [mgmpId]),
+    repo.kelasBerjadwal(tx, [mgmpId]),
   ]);
   return {
     skor_kehadiran: skorKehadiranMgmp(kehadiran.get(mgmpId) ?? [], p.bulan, p.tahun),
-    skor_siswa: skorSiswaMgmp(siswa.get(mgmpId) ?? []),
+    skor_siswa: ringkasanSkorSiswaMgmp(kelas.get(mgmpId) ?? [], siswa.get(mgmpId) ?? []).skor_siswa,
   };
 }
 
@@ -160,14 +200,18 @@ export async function sinkron(p: Periode, audit: KonteksAudit): Promise<HasilSyn
   const pengaturan = await ambilPengaturan(prisma);
   const n = await prisma.$transaction(async (tx) => {
     const ids = await repo.kunciMgmp(tx);
-    const [kehadiran, siswa, lama] = await Promise.all([
+    const [kehadiran, siswa, kelas, lama] = await Promise.all([
       repo.kehadiranPerMgmp(tx, p, pengaturan.pekan.hari_efektif),
       repo.skorSiswaPerMgmp(tx, p),
+      repo.kelasBerjadwal(tx),
       repo.penilaianPeriode(tx, p),
     ]);
     const baris = ids.map((mgmp_id) => {
       const skor_kehadiran = skorKehadiranMgmp(kehadiran.get(mgmp_id) ?? [], p.bulan, p.tahun);
-      const skor_siswa = skorSiswaMgmp(siswa.get(mgmp_id) ?? []);
+      const { skor_siswa } = ringkasanSkorSiswaMgmp(
+        kelas.get(mgmp_id) ?? [],
+        siswa.get(mgmp_id) ?? [],
+      );
       return {
         mgmp_id,
         skor_kehadiran,
@@ -251,7 +295,7 @@ export async function simpan(
 /**
  * Skor siswa MGMP per kelas (§6.5). Sekretaris hanya mengisi baris kelasnya (kelas dari
  * akun, bukan isian form); peran lain wajib memilih kelas. Skor siswa MGMP dihitung ulang
- * sebagai rata-rata kelas yang sudah mengisi.
+ * sebagai rata-rata kelas berjadwal yang sudah mengisi.
  */
 export async function simpanSkorSiswa(
   input: SimpanSkorSiswaMgmpInput,
@@ -264,6 +308,15 @@ export async function simpanSkorSiswa(
     throw user.role === 'sekretaris_kelas'
       ? forbidden('Akun sekretaris belum terikat ke kelas. Hubungi admin.')
       : badRequest('Kelas wajib dipilih.', { kelas_id: ['Kelas wajib dipilih.'] });
+  }
+
+  // Hanya kelas yang punya jadwal dari guru aktif MGMP ini (§6.5). Sekretaris → 403
+  // (akses); peran lain → 422, karena isian kelas tak berjadwal tidak akan dihitung.
+  // ASUMSI: pembatasan untuk peran lain ini perlu dikonfirmasi tim.
+  const berjadwal = (await repo.kelasBerjadwal(prisma, [input.mgmp_id])).get(input.mgmp_id) ?? [];
+  if (user.role === 'sekretaris_kelas') periksaKelasSekretaris(berjadwal, kelasId);
+  else if (!berjadwal.includes(kelasId)) {
+    throw businessRule('Kelas ini tidak punya jadwal dari guru MGMP tersebut.');
   }
 
   const pengaturan = await ambilPengaturan(prisma);

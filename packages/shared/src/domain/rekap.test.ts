@@ -8,6 +8,7 @@ import {
   persentaseJamTerisi,
   rataRataPekanGuru,
   rataRataBulanan,
+  berubahSejakKoreksi,
   totalJamHadir,
   totalJamWajib,
 } from './rekap';
@@ -235,5 +236,63 @@ describe('rataRataPekanGuru', () => {
   it('tanpa guru berjadwal → null', () => {
     expect(rataRataPekanGuru([])).toBeNull();
     expect(rataRataPekanGuru([{ total_jam_wajib: 0, persentase_kehadiran: 0 }])).toBeNull();
+  });
+});
+
+describe('berubahSejakKoreksi', () => {
+  const rekap = {
+    tanggal_mulai: '2026-03-02',
+    tanggal_selesai: '2026-03-06',
+    dikoreksi_pada: '2026-03-10T03:00:00.000Z',
+  };
+
+  it('catatan pekan itu yang diubah setelah koreksi → true', () => {
+    expect(
+      berubahSejakKoreksi(rekap, [
+        { tanggal: '2026-03-04', updated_at: '2026-03-10T03:00:01.000Z' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('catatan sebelum/tepat saat koreksi, atau di luar pekan → false', () => {
+    expect(
+      berubahSejakKoreksi(rekap, [
+        { tanggal: '2026-03-04', updated_at: '2026-03-10T03:00:00.000Z' },
+        { tanggal: '2026-03-09', updated_at: '2026-03-11T00:00:00.000Z' },
+        { tanggal: '2026-02-27', updated_at: '2026-03-11T00:00:00.000Z' },
+      ]),
+    ).toBe(false);
+  });
+
+  it('batas pekan inklusif', () => {
+    const baru = '2026-03-11T00:00:00.000Z';
+    expect(berubahSejakKoreksi(rekap, [{ tanggal: '2026-03-02', updated_at: baru }])).toBe(true);
+    expect(berubahSejakKoreksi(rekap, [{ tanggal: '2026-03-06', updated_at: baru }])).toBe(true);
+  });
+
+  it('belum dikoreksi atau tanpa catatan → false', () => {
+    expect(
+      berubahSejakKoreksi({ ...rekap, dikoreksi_pada: null }, [
+        { tanggal: '2026-03-04', updated_at: '2026-03-11T00:00:00.000Z' },
+      ]),
+    ).toBe(false);
+    expect(berubahSejakKoreksi(rekap, [])).toBe(false);
+  });
+});
+
+describe('pekan belum disinkron tidak dihitung 0', () => {
+  it('rata-rata bulanan hanya dari pekan yang punya rekap', () => {
+    // Maret: hanya pekan 2 Mar yang punya rekap (100%); pekan lain belum disinkron.
+    const rekap = [
+      { tanggal_mulai: '2026-03-02', tanggal_selesai: '2026-03-06', persentase_kehadiran: 100 },
+    ];
+    expect(rataRataBulanan(rekap, 3, 2026)).toBe(100);
+    expect(
+      skorKehadiranMgmp(
+        [{ jam_wajib_jadwal: 10, rekap: rekap.map((r) => ({ ...r, total_jam_wajib: 10 })) }],
+        3,
+        2026,
+      ),
+    ).toBe(100);
   });
 });

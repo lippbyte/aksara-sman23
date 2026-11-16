@@ -57,7 +57,7 @@ Peran `viewer` ada di prototype tetapi tidak dipakai. **Tidak dibawa.**
 | Kehadiran siswa: tambah, ubah, hapus | ✅ | — | 🔒 | — |
 | Rekap kehadiran guru (lihat, sinkron, ubah, hapus, ekspor) | ✅ | ✅ | — | — |
 | Penilaian kinerja bulanan | ✅ | ✅ | — | ✅ |
-| Penilaian MGMP | ✅ | ✅ | 🔒 hanya skor siswa kelasnya (`penilaian_mgmp_siswa`) | ✅ |
+| Penilaian MGMP | ✅ | ✅ | 🔒 hanya skor siswa kelasnya (`penilaian_mgmp_siswa`), dan hanya untuk MGMP yang gurunya punya jadwal di kelasnya (selain itu 403 dan tidak tampil) | ✅ |
 | Laporan rekap siswa + ekspor | ✅ | ✅ | — | — |
 | Log aktivitas | ✅ | — | — | — |
 | Pengaturan (guru, kelas, siswa, jadwal, MGMP, akun, sekolah) | ✅ | — | — | — |
@@ -120,6 +120,7 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
 - **Koreksi manual** `[TIM: 16 Nov 2026]`: admin/manajemen boleh mengubah jam wajib dan jam hadir satu baris rekap dengan **alasan wajib**. Persentase tetap dihitung dengan rumus di atas. Baris ditandai `dikoreksi_manual` beserta alasan, pengoreksi, dan waktunya, lalu dicatat di log.
 - Sinkron **melewati** baris yang dikoreksi manual. Hanya **admin** yang boleh memilih `timpa_koreksi`; sebelum itu dialog konfirmasi menyebut jumlah baris yang akan ditimpa. Baris yang ditimpa kembali ke hasil hitung dan tanda koreksinya dihapus; penimpaan dicatat di log (`TIMPA_KOREKSI_REKAP`).
 - Hitung ulang otomatis karena perubahan kehadiran (6.1) juga melewati baris yang dikoreksi manual. `[ASUMSI, perlu dikonfirmasi]`
+- Baris terkoreksi diberi lencana **"Data berubah sejak dikoreksi"** bila ada catatan kehadiran guru itu pada pekan tersebut yang dibuat atau diubah setelah `dikoreksi_pada`. Rekap **tidak** dihitung ulang otomatis; lencana hilang setelah dikoreksi ulang atau ditimpa sinkron. Catatan yang dihapus tidak terdeteksi `[ASUMSI]`. `[TIM: 16 Nov 2026]`
 
 ### 6.4 Penilaian kinerja guru bulanan
 - `skor_kehadiran` diisi otomatis = rata-rata `persentase_kehadiran` pekan-pekan yang **beririsan** dengan bulan itu. *(Perbaikan: prototype hanya menghitung pekan yang seluruhnya berada di dalam bulan.)*
@@ -128,6 +129,7 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
   - bila ada → kehadiran 50% + administrasi 30% + manajemen 20%.
 - Predikat: ≥91 Sangat Baik · ≥76 Baik · ≥61 Cukup · selain itu Kurang.
 - **Jendela penilaian:** pengisian dibuka pada 3 hari terakhir bulan berjalan (dapat diatur). Admin dapat membuka di luar jendela; tindakan itu tercatat di log.
+- **Pekan belum disinkron** `[TIM: 16 Nov 2026]`: halaman Penilaian Kinerja dan MGMP menampilkan peringatan "n pekan bulan ini belum disinkron" untuk pekan yang beririsan dengan bulan, sudah selesai (hari efektif terakhirnya sebelum hari ini), dan belum punya satu pun baris rekap. Pekan itu **tidak dihitung sebagai 0**; skor kehadiran hanya dari pekan yang punya rekap. Pekan dengan minimal satu baris rekap dianggap sudah disinkron `[ASUMSI]`.
 - `skor_administrasi_avg` di prototype disebut "rata-rata dari 5 atasan", tetapi hanya rata-ratanya yang disimpan. `[PERLU DIKONFIRMASI]` apakah perlu tabel nilai per penilai.
 - Aspek dan bobot penilaian **mengikuti ketentuan sekolah**. Sistem hanya mendokumentasikan, tidak memutuskan.
 
@@ -137,7 +139,10 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
   - **hanya guru tanpa jam wajib yang dikeluarkan**: guru yang semua rekap pekannya berjam wajib 0, atau yang tidak punya rekap dan tidak punya jadwal pada hari efektif;
   - guru **berjadwal** (jam wajib jadwal > 0) yang belum punya catatan/rekap pada bulan itu **dihitung 0**;
   - pekan berjam wajib 0 milik guru yang punya pekan berjadwal lain dilewati, bukan dihitung 0%. `[ASUMSI, perlu dikonfirmasi]`
-- `skor_siswa` = rata-rata skor per kelas di `penilaian_mgmp_siswa` yang sudah diisi; 0 bila belum ada kelas yang mengisi. Sekretaris mengisi skor **kelasnya sendiri** (kelas dari akun, bukan dari form); admin/manajemen/penilai boleh mengisi untuk kelas yang dipilih. Halaman menampilkan "n dari m kelas sudah mengisi" (m = jumlah seluruh kelas `[ASUMSI]`). `[TIM: 16 Nov 2026]`
+- **Kelas berjadwal** MGMP = kelas yang punya jadwal mengajar (hari apa pun) dari guru **aktif** anggota MGMP itu. `[TIM: 16 Nov 2026]`
+- `skor_siswa` = rata-rata skor kelas **berjadwal** di `penilaian_mgmp_siswa` yang sudah diisi; 0 bila belum ada. Halaman dan CSV menampilkan "n dari m kelas": m = jumlah kelas berjadwal, n = kelas berjadwal yang sudah mengisi. MGMP tanpa jadwal sama sekali → "0 dari 0 kelas" (tampil "Tidak ada kelas berjadwal"), skor siswa 0.
+- Sekretaris mengisi skor **kelasnya sendiri** (kelas dari akun, bukan dari form) dan hanya untuk MGMP yang kelasnya berjadwal; di luar itu 403 dan MGMP itu tidak tampil di daftarnya. Admin/manajemen/penilai memilih kelas; kelas tanpa jadwal MGMP itu ditolak 422 `[ASUMSI, perlu dikonfirmasi]`.
+- Isian dari kelas yang kemudian tidak lagi berjadwal tetap tersimpan, tampil di rincian per kelas dengan tanda "tidak dihitung", dan tidak ikut rata-rata. `[ASUMSI]`
 - `skor_administrasi` dan `catatan` diisi admin/pimpinan/penilai.
 - Sinkron MGMP menghitung ulang `skor_kehadiran` dan `skor_siswa` lalu `skor_akhir`; isian penilai tidak berubah.
 - `skor_akhir` = kehadiran 40% + siswa 30% + administrasi 30% (default, dapat diatur).

@@ -66,6 +66,7 @@ const REKAP: Rekap = {
   alasan_koreksi: null,
   nama_pengoreksi: null,
   dikoreksi_pada: null,
+  berubah_sejak_koreksi: false,
   updated_at: '2026-11-13T10:00:00.000Z',
 };
 const REKAP_KOREKSI: Rekap = {
@@ -78,6 +79,7 @@ const REKAP_KOREKSI: Rekap = {
   alasan_koreksi: 'Mengajar pengganti (contoh)',
   nama_pengoreksi: 'Admin Contoh',
   dikoreksi_pada: '2026-11-14T03:00:00.000Z',
+  berubah_sejak_koreksi: true,
 };
 let terkoreksi = 0;
 
@@ -160,6 +162,8 @@ describe('halaman Rekap Kehadiran Guru', () => {
     expect(
       within(tabel).getByText('Alasan: Mengajar pengganti (contoh) (Admin Contoh)'),
     ).toBeInTheDocument();
+    // Lencana hanya pada baris terkoreksi yang datanya berubah sesudahnya.
+    expect(within(tabel).getAllByText('Data berubah sejak dikoreksi')).toHaveLength(1);
   });
 
   it('dialog sinkron menyebut jumlah baris terkoreksi; manajemen tidak bisa menimpa', async () => {

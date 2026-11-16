@@ -1,4 +1,4 @@
-import type { Rekap, RekapFilter } from '@sms/shared';
+import { berubahSejakKoreksi, type Rekap, type RekapFilter } from '@sms/shared';
 import { keAngka, keDate, keNumber, keTanggalISO } from '../../lib/konversi';
 import { prisma, type Db } from '../../lib/prisma';
 
@@ -29,8 +29,49 @@ function keRekap(r: Baris): Rekap {
     alasan_koreksi: r.alasan_koreksi,
     nama_pengoreksi: r.pengoreksi?.name ?? null,
     dikoreksi_pada: r.dikoreksi_pada ? r.dikoreksi_pada.toISOString() : null,
+    berubah_sejak_koreksi: false,
     updated_at: r.updated_at.toISOString(),
   };
+}
+
+/**
+ * Menandai baris terkoreksi yang catatan kehadiran gurunya pada pekan itu dibuat/diubah
+ * setelah dikoreksi (satu query untuk semua baris; perbandingan oleh fungsi domain).
+ * Rekap TIDAK dihitung ulang.
+ */
+async function tandaiPerubahan(db: Db, rows: Rekap[]): Promise<Rekap[]> {
+  const terkoreksi = rows.filter((r) => r.dikoreksi_manual && r.dikoreksi_pada !== null);
+  if (terkoreksi.length === 0) return rows;
+  const awal = terkoreksi.reduce(
+    (m, r) => (r.tanggal_mulai < m ? r.tanggal_mulai : m),
+    '9999-12-31',
+  );
+  const akhir = terkoreksi.reduce((m, r) => (r.tanggal_selesai > m ? r.tanggal_selesai : m), '');
+  const sejak = terkoreksi.reduce(
+    (m, r) => (r.dikoreksi_pada !== null && r.dikoreksi_pada < m ? r.dikoreksi_pada : m),
+    '9999-12-31T00:00:00.000Z',
+  );
+  const kehadiran = await db.kehadiran.findMany({
+    where: {
+      guru_id: { in: [...new Set(terkoreksi.map((r) => r.guru_id))] },
+      tanggal: { gte: keDate(awal), lte: keDate(akhir) },
+      updated_at: { gt: new Date(sejak) },
+    },
+    select: { guru_id: true, tanggal: true, updated_at: true },
+  });
+  const perGuru = new Map<number, { tanggal: string; updated_at: string }[]>();
+  for (const k of kehadiran) {
+    const id = keNumber(k.guru_id);
+    perGuru.set(id, [
+      ...(perGuru.get(id) ?? []),
+      { tanggal: keTanggalISO(k.tanggal), updated_at: k.updated_at.toISOString() },
+    ]);
+  }
+  return rows.map((r) =>
+    r.dikoreksi_manual
+      ? { ...r, berubah_sejak_koreksi: berubahSejakKoreksi(r, perGuru.get(r.guru_id) ?? []) }
+      : r,
+  );
 }
 
 function susunWhere(f: RekapFilter) {
@@ -71,12 +112,12 @@ export async function daftar(f: RekapFilter, halaman?: { page: number; pageSize:
     }),
     prisma.rekapKehadiranGuru.count({ where }),
   ]);
-  return { rows: rows.map(keRekap), total };
+  return { rows: await tandaiPerubahan(prisma, rows.map(keRekap)), total };
 }
 
 export async function ambil(db: Db, id: number): Promise<Rekap | null> {
   const r = await db.rekapKehadiranGuru.findUnique({ where: { id }, include });
-  return r ? keRekap(r) : null;
+  return r ? ((await tandaiPerubahan(db, [keRekap(r)]))[0] ?? null) : null;
 }
 
 export async function ubah(

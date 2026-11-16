@@ -136,6 +136,29 @@ export function skorKehadiranMgmp(
 }
 
 /**
+ * Baris rekap yang dikoreksi manual: adakah catatan kehadiran guru itu pada pekan tersebut
+ * yang dibuat atau diubah SETELAH `dikoreksi_pada`? Hanya penanda; rekap tidak dihitung ulang.
+ *
+ * ASUMSI: catatan yang DIHAPUS tidak terdeteksi (tidak ada jejak per guru/tanggal selain log).
+ *
+ * @param kehadiran catatan kehadiran guru itu; `updated_at` ISO (UTC).
+ */
+export function berubahSejakKoreksi(
+  rekap: { tanggal_mulai: TanggalISO; tanggal_selesai: TanggalISO; dikoreksi_pada: string | null },
+  kehadiran: readonly { tanggal: TanggalISO; updated_at: string }[],
+): boolean {
+  const pada = rekap.dikoreksi_pada;
+  if (pada === null) return false;
+  const batas = new Date(pada).getTime();
+  return kehadiran.some(
+    (k) =>
+      k.tanggal >= rekap.tanggal_mulai &&
+      k.tanggal <= rekap.tanggal_selesai &&
+      new Date(k.updated_at).getTime() > batas,
+  );
+}
+
+/**
  * Persentase jam terisi hari ini (dashboard, DESIGN §7): JP yang sudah dicatat dibanding
  * JP terjadwal. `min(100, round(tercatat / terjadwal × 100, 2))`; 0 bila tidak ada jadwal.
  */

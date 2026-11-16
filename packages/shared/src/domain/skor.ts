@@ -55,6 +55,51 @@ export function skorSiswaMgmp(skorPerKelas: readonly number[]): number {
   return bulatkan2(jumlah / skorPerKelas.length);
 }
 
+/**
+ * Kelas yang wajib mengisi skor siswa tiap MGMP: kelas yang punya jadwal mengajar dari guru
+ * aktif anggota MGMP itu. Hasil: MGMP → ID kelas unik, terurut.
+ *
+ * @param jadwal jadwal guru AKTIF yang punya MGMP (`mgmp_id` guru, `kelas_id` jadwal).
+ */
+export function kelasBerjadwalPerMgmp(
+  jadwal: readonly { mgmp_id: number; kelas_id: number }[],
+): Map<number, number[]> {
+  const peta = new Map<number, Set<number>>();
+  for (const j of jadwal) {
+    const set = peta.get(j.mgmp_id) ?? new Set<number>();
+    set.add(j.kelas_id);
+    peta.set(j.mgmp_id, set);
+  }
+  return new Map([...peta].map(([m, s]) => [m, [...s].sort((a, b) => a - b)]));
+}
+
+export interface RingkasanSkorSiswaMgmp {
+  /** Rata-rata skor kelas berjadwal yang sudah mengisi (`skorSiswaMgmp`). */
+  skor_siswa: number;
+  /** n: kelas berjadwal yang sudah mengisi. */
+  kelas_terisi: number;
+  /** m: kelas berjadwal (punya jadwal dari guru aktif MGMP itu). */
+  jumlah_kelas: number;
+}
+
+/**
+ * Skor siswa MGMP dan "n dari m kelas" (§6.5). Hanya isian dari kelas berjadwal yang
+ * dihitung; isian dari kelas lain (mis. jadwal sudah berubah) disimpan tetapi diabaikan.
+ * MGMP tanpa jadwal → 0 dari 0 kelas, skor 0.
+ */
+export function ringkasanSkorSiswaMgmp(
+  kelasBerjadwal: readonly number[],
+  isian: readonly { kelas_id: number; skor: number }[],
+): RingkasanSkorSiswaMgmp {
+  const berjadwal = new Set(kelasBerjadwal);
+  const dihitung = isian.filter((i) => berjadwal.has(i.kelas_id));
+  return {
+    skor_siswa: skorSiswaMgmp(dihitung.map((i) => i.skor)),
+    kelas_terisi: new Set(dihitung.map((i) => i.kelas_id)).size,
+    jumlah_kelas: berjadwal.size,
+  };
+}
+
 /** Skor akhir MGMP (§6.5): kehadiran + siswa + administrasi (default 40/30/30). */
 export function skorAkhirMgmp(skor: SkorMgmp, bobot: BobotMgmp): number {
   const nilai =

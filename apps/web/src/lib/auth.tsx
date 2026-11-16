@@ -68,14 +68,24 @@ export function usePengguna(): PenggunaSesi {
   return user;
 }
 
+/**
+ * Ganti sesi di cache: query sesi DIPERBARUI (bukan dibuang) agar `AuthProvider` yang
+ * sedang mengamatinya ikut berubah; data lain dibuang supaya data pengguna sebelumnya
+ * tidak tersisa. (`queryClient.clear()` membuang query sesi yang sedang diamati, sehingga
+ * provider tetap melihat status lama → login terpental kembali ke /masuk.)
+ */
+function gantiSesi(queryClient: ReturnType<typeof useQueryClient>, sesi: SesiSaya | null) {
+  queryClient.removeQueries({
+    predicate: (q) => JSON.stringify(q.queryKey) !== JSON.stringify(KUNCI_SESI),
+  });
+  queryClient.setQueryData(KUNCI_SESI, sesi);
+}
+
 export function useMasuk() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: LoginInput) => api.post<Respons<SesiSaya>>('/auth/login', input),
-    onSuccess: (res) => {
-      queryClient.clear();
-      queryClient.setQueryData(KUNCI_SESI, res.data);
-    },
+    onSuccess: (res) => gantiSesi(queryClient, res.data),
   });
 }
 
@@ -83,10 +93,7 @@ export function useKeluar() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.post<void>('/auth/logout'),
-    onSettled: () => {
-      // Data pengguna sebelumnya tidak boleh tersisa di cache.
-      queryClient.clear();
-      queryClient.setQueryData(KUNCI_SESI, null);
-    },
+    // Data pengguna sebelumnya tidak boleh tersisa di cache.
+    onSettled: () => gantiSesi(queryClient, null),
   });
 }

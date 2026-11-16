@@ -12,6 +12,8 @@ export default tseslint.config(
       '**/coverage/**',
       '**/generated/**',
       'reference/**',
+      'apps/e2e/test-results/**',
+      'apps/e2e/playwright-report/**',
     ],
   },
   js.configs.recommended,
@@ -27,7 +29,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/api/**/*.ts', 'packages/**/*.ts', '*.js'],
+    files: ['apps/api/**/*.ts', 'apps/e2e/**/*.ts', 'packages/**/*.ts', '*.js'],
     languageOptions: { globals: globals.node },
   },
   {

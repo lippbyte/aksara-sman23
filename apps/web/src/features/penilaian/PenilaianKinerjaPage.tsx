@@ -22,6 +22,7 @@ import { angka, namaBulan } from '@/lib/format';
 import { urlEkspor, useDaftarKinerja, useSimpanKinerja, useSinkronPenilaian } from './api';
 import {
   InfoJendela,
+  PeringatanPekan,
   keSkor,
   LencanaPredikat,
   PilihPeriode,
@@ -129,6 +130,10 @@ export function PenilaianKinerjaPage() {
         </FilterItem>
       </PilihPeriode>
       <InfoJendela jendela={jendela} periode={periode} admin={admin} />
+      <PeringatanPekan
+        pekan={daftar.data?.pekan_belum_disinkron}
+        bolehRekap={user.role === 'admin' || user.role === 'manajemen_guru'}
+      />
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-ink-subtle">

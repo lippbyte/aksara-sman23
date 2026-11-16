@@ -93,6 +93,13 @@ export function RekapPage() {
             {r.dikoreksi_manual && (
               <span className="mt-1 block">
                 <StatusBadge status="Dikoreksi manual" nada="izin" />
+                {r.berubah_sejak_koreksi && (
+                  <StatusBadge
+                    status="Data berubah sejak dikoreksi"
+                    nada="tidak-hadir"
+                    className="ml-1"
+                  />
+                )}
                 {r.alasan_koreksi && (
                   <span className="mt-0.5 block text-xs font-normal text-ink-muted">
                     Alasan: {r.alasan_koreksi}

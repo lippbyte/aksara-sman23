@@ -48,9 +48,23 @@ const KINERJA: PenilaianKinerjaBaris[] = [
   },
 ];
 
-function daftar<T>(data: T[], jendela = JENDELA_BUKA): DaftarPenilaian<T> {
-  return { data, meta: { page: 1, pageSize: 20, total: data.length }, jendela };
+function daftar<T>(
+  data: T[],
+  jendela = JENDELA_BUKA,
+  pekan_belum_disinkron: DaftarPenilaian<T>['pekan_belum_disinkron'] = [],
+): DaftarPenilaian<T> {
+  return {
+    data,
+    meta: { page: 1, pageSize: 20, total: data.length },
+    jendela,
+    pekan_belum_disinkron,
+  };
 }
+
+const BELUM: DaftarPenilaian<unknown>['pekan_belum_disinkron'] = [
+  { minggu_ke: 5, tahun: 2026, tanggal_mulai: '2026-11-16', tanggal_selesai: '2026-11-20' },
+  { minggu_ke: 6, tahun: 2026, tanggal_mulai: '2026-11-23', tanggal_selesai: '2026-11-27' },
+];
 
 describe('Penilaian Kinerja', () => {
   it('menampilkan predikat, "Belum dinilai", info jendela, dan teks bobot sekolah', async () => {
@@ -161,6 +175,7 @@ describe('Penilaian MGMP', () => {
       skor: 80,
       nama_pengisi: 'Sekretaris X-1 Contoh',
       updated_at: null,
+      berjadwal: true,
     },
     {
       kelas_id: 2,
@@ -168,8 +183,16 @@ describe('Penilaian MGMP', () => {
       skor: 90,
       nama_pengisi: 'Guru Penilai Contoh',
       updated_at: null,
+      berjadwal: true,
     },
-    { kelas_id: 3, nama_kelas: 'XI-1', skor: null, nama_pengisi: null, updated_at: null },
+    {
+      kelas_id: 3,
+      nama_kelas: 'XI-1',
+      skor: null,
+      nama_pengisi: null,
+      updated_at: null,
+      berjadwal: true,
+    },
   ];
 
   it('sekretaris: skor kelasnya dan "n dari m kelas"; mengisi lewat rute skor siswa tanpa kelas', async () => {
@@ -291,5 +314,85 @@ describe('Penilaian MGMP', () => {
       kelas_id: 3,
       skor: 75,
     });
+  });
+
+  it('MGMP tanpa jadwal: "Tidak ada kelas berjadwal"; isian kelas tak berjadwal ditandai dan tidak bisa dipilih', async () => {
+    const tanpa = { ...MGMP[0]!, mgmp_id: 2, nama_mapel: 'Seni', kelas_terisi: 0, jumlah_kelas: 0 };
+    pasangApiTiruan('admin', (url) => {
+      if (url.includes('/penilaian-mgmp/skor-siswa?'))
+        return {
+          body: {
+            data: [
+              ...RINCIAN,
+              {
+                kelas_id: 9,
+                nama_kelas: 'XII-3',
+                skor: 10,
+                nama_pengisi: 'Admin Contoh',
+                updated_at: null,
+                berjadwal: false,
+              },
+            ],
+          },
+        };
+      return url.includes('/penilaian-mgmp?') ? { body: daftar([...MGMP, tanpa]) } : undefined;
+    });
+    tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
+    const tabel = await screen.findByRole('table');
+    expect(within(tabel).getAllByText('Tidak ada kelas berjadwal')[0]).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Skor siswa per kelas MGMP Matematika' })[0]!,
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      await within(dialog).findByText('Tanpa jadwal MGMP ini, tidak dihitung'),
+    ).toBeInTheDocument();
+    const pilihan = within(within(dialog).getByLabelText(/^Kelas/))
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(pilihan).toEqual(['Pilih kelas', 'X-1', 'X-2', 'XI-1']);
+  });
+
+  it('peringatan pekan belum disinkron tampil untuk penilai, tidak untuk sekretaris', async () => {
+    pasangApiTiruan('guru_penilai', (url) =>
+      url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP, JENDELA_BUKA, BELUM) } : undefined,
+    );
+    tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
+    const status = await screen.findByText('2 pekan bulan ini belum disinkron');
+    expect(status.closest('[role=status]')).toHaveTextContent(
+      'Pekan 5 (16–20 Nov), Pekan 6 (23–27 Nov)',
+    );
+    expect(status.closest('[role=status]')).toHaveTextContent('tidak dihitung sebagai 0');
+    expect(
+      screen.queryByRole('link', { name: 'Buka Rekap Kehadiran Guru' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('sekretaris: tanpa peringatan pekan; daftar kosong menjelaskan alasannya', async () => {
+    pasangApiTiruan('sekretaris_kelas', (url) =>
+      url.includes('/penilaian-mgmp?') ? { body: daftar([], JENDELA_BUKA, BELUM) } : undefined,
+    );
+    tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
+    expect(
+      await screen.findByText('Belum ada MGMP yang gurunya mengajar di kelas X-1.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/belum disinkron/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Peringatan pekan di Penilaian Kinerja', () => {
+  it('manajemen melihat peringatan dengan tautan ke rekap', async () => {
+    pasangApiTiruan('manajemen_guru', (url) =>
+      url.includes('/penilaian-kinerja?')
+        ? { body: daftar(KINERJA, JENDELA_BUKA, BELUM) }
+        : undefined,
+    );
+    tampilkanApp('/penilaian-kinerja?bulan=11&tahun=2026');
+    expect(await screen.findByText('2 pekan bulan ini belum disinkron')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Buka Rekap Kehadiran Guru' })).toHaveAttribute(
+      'href',
+      '/rekap-kehadiran',
+    );
   });
 });

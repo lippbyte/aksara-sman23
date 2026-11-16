@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { PredikatKinerja, PredikatMgmp } from '../constants';
+import type { RentangPekan } from '../domain/pekan';
 import type { JendelaPenilaian } from '../domain/skor';
 import { paginationQuerySchema } from './common';
 import { idWajib, skorSchema, teksOpsional, teksOpsionalQuery } from './dasar';
@@ -109,6 +110,8 @@ export interface SkorSiswaKelasBaris {
   skor: number | null;
   nama_pengisi: string | null;
   updated_at: string | null;
+  /** false: kelas tanpa jadwal guru MGMP ini; isiannya disimpan tetapi tidak dihitung. */
+  berjadwal: boolean;
 }
 
 export interface PenilaianMgmpBaris {
@@ -119,9 +122,9 @@ export interface PenilaianMgmpBaris {
   skor_kehadiran: number | null;
   /** Rata-rata skor kelas yang sudah mengisi; kosong bila belum ada (dan untuk sekretaris). */
   skor_siswa: number | null;
-  /** Jumlah kelas yang sudah mengisi skor siswa periode ini ("n dari m kelas"). */
+  /** n: kelas berjadwal yang sudah mengisi skor siswa periode ini ("n dari m kelas"). */
   kelas_terisi: number;
-  /** Jumlah seluruh kelas. */
+  /** m: kelas yang punya jadwal dari guru aktif MGMP ini. */
   jumlah_kelas: number;
   /** Hanya untuk sekretaris_kelas: skor yang diisi kelasnya; kosong untuk peran lain. */
   skor_kelas_saya: number | null;
@@ -139,6 +142,11 @@ export interface DaftarPenilaian<T> {
   data: T[];
   meta: { page: number; pageSize: number; total: number };
   jendela: JendelaPenilaian & { hari: number };
+  /**
+   * Pekan bulan ini yang sudah selesai tetapi belum punya rekap. Tidak ikut dihitung
+   * (bukan 0); halaman menampilkan peringatan.
+   */
+  pekan_belum_disinkron: RentangPekan[];
 }
 
 export interface HasilSyncPenilaian {

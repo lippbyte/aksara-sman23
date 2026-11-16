@@ -12,3 +12,6 @@ apps/api/uploads/
 .DS_Store
 Thumbs.db
 apps/api/uploads-test/
+apps/e2e/test-results/
+apps/e2e/playwright-report/
+apps/e2e/blob-report/

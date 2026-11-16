@@ -1,7 +1,7 @@
 # Daftar Periksa Audit Teknis
 
 School Management System (nama kerja) · **In Development** · disusun 16 November 2026 (Fase 8),
-diperbarui Fase 9
+diperbarui Fase 9 dan 10
 
 Dokumen ini mencatat hasil pemeriksaan internal tim pengembang sebelum audit teknis. Isinya
 **bukan** pernyataan bahwa sistem aman atau sesuai regulasi. Audit teknis independen dan
@@ -104,7 +104,7 @@ Status: **Sudah** = diterapkan dan ada test/bukti · **Belum** = belum dikerjaka
 | `SegmentedStatus` berperilaku radio group (panah kiri/kanan)      | Sudah  | Test                                                                                                                   |
 | Area sentuh 44 px untuk aksi input di ponsel; tata letak 360 px   | Sudah  | Diperiksa lewat tangkapan layar                                                                                        |
 | Uji pembaca layar nyata (NVDA/VoiceOver)                          | Belum  |                                                                                                                        |
-| Uji alur utama end-to-end (Playwright)                            | Belum  | Disebut "menyusul" di AGENTS §1                                                                                        |
+| Uji alur utama end-to-end (Playwright)                            | Sudah  | `npm run e2e`: 3 alur × viewport 360/1280 px, basis data `*_e2e` di-seed ulang tiap run                                |
 
 ## 9. Kinerja (seed satu semester)
 

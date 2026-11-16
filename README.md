@@ -83,6 +83,7 @@ dan 4 pekan kehadiran sampai hari seed dijalankan. Semua nama memakai kata "Cont
 | `MYSQL_ROOT_PASSWORD`                            | Kata sandi root MySQL lokal                       |
 | `DATABASE_URL`                                   | `mysql://USER:PASSWORD@127.0.0.1:PORT/DATABASE`   |
 | `TEST_DATABASE_URL`                              | Basis data test, nama wajib berakhiran `_test`    |
+| `E2E_DATABASE_URL`                               | Basis data e2e, nama wajib berakhiran `_e2e`      |
 | `SEED_PASSWORD`                                  | Kata sandi akun contoh (minimal 8 karakter)       |
 | `LOG_LEVEL`                                      | Opsional: `fatal` … `debug`, `silent`             |
 
@@ -97,7 +98,35 @@ npm run build
 npm run format               # prettier --write
 npm run db:reset             # hapus dan buat ulang basis data dev
 npm run perf -w @sms/api     # uji kinerja dengan seed besar di basis data *_perf
+npm run e2e                  # Playwright, basis data *_e2e (lihat di bawah)
 ```
+
+## Uji end-to-end (Playwright)
+
+Tiga alur utama dengan data seed fiktif, masing-masing di viewport 360 px dan 1280 px:
+
+- sekretaris mencatat kehadiran guru (termasuk ditolak karena jam bentrok), rekap ikut berubah;
+- sekretaris mengabsen siswa kelasnya secara massal, riwayat tampil, kelas lain tidak terlihat;
+- manajemen membuka dashboard (grafik dan tabel alternatif), rekap, lalu ekspor CSV.
+
+Persiapan sekali:
+
+```bash
+docker compose up -d                 # MySQL harus berjalan
+npx playwright install chromium      # unduh browser uji (sekali per mesin)
+```
+
+Isi `E2E_DATABASE_URL` di `.env` dengan basis data terpisah yang namanya **berakhiran `_e2e`**,
+mis. `mysql://USER:PASSWORD@127.0.0.1:3308/sms_e2e`. Basis data dibuat bila belum ada.
+
+```bash
+npm run e2e
+```
+
+Setiap run: migrasi diterapkan dan basis data e2e **diisi ulang** dengan data fiktif, lalu API
+(port 3101) dan web (port 5183) dijalankan khusus untuk uji, jadi tidak mengganggu `npm run dev`.
+Laporan kegagalan (tangkapan layar, trace) ada di `apps/e2e/test-results/`; buka trace dengan
+`npx playwright show-trace <berkas trace.zip>`.
 
 ## Struktur
 
@@ -105,5 +134,6 @@ npm run perf -w @sms/api     # uji kinerja dengan seed besar di basis data *_per
 packages/shared   konstanta, skema zod, dan fungsi domain murni (dipakai web dan api)
 apps/api          Express 5 + Prisma (MySQL)
 apps/web          React + Vite + Tailwind CSS v4 + Recharts
+apps/e2e          uji alur utama Playwright
 docs/             daftar periksa audit
 ```

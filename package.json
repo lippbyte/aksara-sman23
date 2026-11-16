@@ -18,6 +18,7 @@
     "format": "prettier --write .",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "e2e": "npm run e2e -w @sms/e2e",
     "db:generate": "npm run db:generate -w @sms/api",
     "db:migrate": "npm run db:migrate -w @sms/api",
     "db:seed": "npm run db:seed -w @sms/api",

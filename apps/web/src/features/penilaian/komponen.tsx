@@ -1,10 +1,10 @@
-import type { JendelaPenilaian, Periode } from '@sms/shared';
-import { CalendarClock, Info } from 'lucide-react';
-import { useSearchParams } from 'react-router';
+import type { JendelaPenilaian, Periode, RentangPekan } from '@sms/shared';
+import { CalendarClock, Info, TriangleAlert } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router';
 import { FilterBar, FilterItem } from '@/components/FilterBar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Input, Select } from '@/components/ui/input';
-import { hariIni, namaBulan, tanggalPanjang, tanggalRingkas } from '@/lib/format';
+import { hariIni, labelPekan, namaBulan, tanggalPanjang, tanggalRingkas } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /** Periode dari URL (`?bulan=&tahun=`); default bulan berjalan (zona Jakarta). */
@@ -121,6 +121,43 @@ export function InfoJendela({ jendela, periode, admin }: InfoJendelaProps) {
           className={cn('self-start')}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Peringatan pekan yang sudah selesai tetapi belum disinkron (belum punya rekap). Pekan itu
+ * tidak ikut dihitung, bukan dihitung 0.
+ */
+export function PeringatanPekan({
+  pekan,
+  bolehRekap,
+}: {
+  pekan: readonly RentangPekan[] | undefined;
+  bolehRekap: boolean;
+}) {
+  if (!pekan || pekan.length === 0) return null;
+  return (
+    <div
+      role="status"
+      className="mb-3 flex items-start gap-3 rounded-xl border border-line bg-izin-soft p-4 text-sm"
+    >
+      <TriangleAlert className="mt-0.5 size-[18px] shrink-0 text-izin" aria-hidden="true" />
+      <div>
+        <p className="font-medium text-ink">{pekan.length} pekan bulan ini belum disinkron</p>
+        <p className="text-xs text-ink-muted">
+          {pekan.map((p) => labelPekan(p.minggu_ke, p.tanggal_mulai, p.tanggal_selesai)).join(', ')}
+          . Skor kehadiran hanya dihitung dari pekan yang sudah punya rekap; pekan ini tidak
+          dihitung sebagai 0.{' '}
+          {bolehRekap ? (
+            <Link to="/rekap-kehadiran" className="font-medium text-ink underline">
+              Buka Rekap Kehadiran Guru
+            </Link>
+          ) : (
+            'Minta admin atau manajemen menyinkronkan rekap.'
+          )}
+        </p>
+      </div>
     </div>
   );
 }
