@@ -5,6 +5,7 @@ import { AppError, businessRule, notFound } from '../../lib/errors';
 import { keNumber } from '../../lib/konversi';
 import { prisma } from '../../lib/prisma';
 import { urlLogo } from '../../lib/sekolah';
+import { akhiriSesiPengguna } from '../../lib/session';
 import * as repo from './repo';
 
 const OPSI_ARGON = { type: argon2.argon2id } as const;
@@ -89,6 +90,7 @@ export async function ubahPasswordSendiri(
   user: PenggunaSesi,
   input: UbahPasswordInput,
   audit: KonteksAudit,
+  sesiSaatIni: string,
 ): Promise<void> {
   const baris = await repo.cariUserDenganId(user.id);
   if (!baris) throw notFound('Akun tidak ditemukan.');
@@ -98,12 +100,13 @@ export async function ubahPasswordSendiri(
   const hash = await hashPassword(input.password_baru);
   await prisma.$transaction(async (tx) => {
     await repo.simpanPassword(tx, user.id, hash);
+    const n = await akhiriSesiPengguna(tx, user.id, sesiSaatIni);
     await catatAudit(tx, audit, {
       module: 'Auth',
       aktivitas: 'UBAH_PASSWORD',
       entity_type: 'users',
       entity_id: user.id,
-      description: `${user.name} mengubah kata sandinya.`,
+      description: `${user.name} mengubah kata sandinya; ${n} sesi lain diakhiri.`,
     });
   });
 }

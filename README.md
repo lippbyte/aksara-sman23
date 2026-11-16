@@ -23,9 +23,10 @@ memakai data contoh (fiktif). Dikembangkan oleh EDILAKSO.
 - **Absensi Guru**: catat kehadiran guru per kelas, jam ke-, dan lama JP; tolak jam bentrok;
   rekap pekan dihitung ulang otomatis.
 - **Absensi Siswa**: input massal per kelas, tanggal, dan jam ke-; riwayat per sesi.
-- **Rekap Kehadiran Guru**: per pekan, sinkron massal, koreksi, ekspor CSV.
+- **Rekap Kehadiran Guru**: per pekan, sinkron massal, koreksi manual dengan alasan (dilewati
+  sinkron kecuali admin memilih menimpa), ekspor CSV.
 - **Penilaian Kinerja** dan **Penilaian MGMP** bulanan dengan jendela penilaian dan bobot dari
-  pengaturan sekolah.
+  pengaturan sekolah. Skor siswa MGMP diisi per kelas oleh sekretaris kelas itu.
 - **Laporan Rekap Siswa** dengan ekspor CSV.
 - **Dashboard** sesuai peran: ringkasan pimpinan, dashboard kelas, dashboard penilai.
 - **Pengaturan** data master dan akun, **Log Aktivitas**.

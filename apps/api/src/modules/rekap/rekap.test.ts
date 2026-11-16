@@ -11,8 +11,10 @@ import { createApp, tutupSumberDaya } from '../../app';
 import { BOM } from '../../lib/csv';
 import { keAngka, keDate, keNumber, keTanggalISO, statusKehadiranDariDb } from '../../lib/konversi';
 import { prisma } from '../../lib/prisma';
+import { ambilPengaturan } from '../../lib/sekolah';
 import { hariIni } from '../../lib/waktu';
 import { BUKAN_ADMIN, Klien, masukSebagai } from '../../test/bantuan';
+import { hitungUlangRekapTerdampak } from './hitung';
 
 const app = createApp();
 const R = '/api/v1/rekap-kehadiran';
@@ -104,6 +106,7 @@ describe('otorisasi /rekap-kehadiran', () => {
     ['get', `${R}/mapel`],
     ['get', `${R}/export`],
     ['post', `${R}/sync`],
+    ['get', `${R}/sync/pratinjau?minggu_ke=1&tahun=2026`],
     ['put', `${R}/1`],
     ['delete', `${R}/1`],
   ];
@@ -285,34 +288,143 @@ describe('GET /rekap-kehadiran', () => {
   });
 });
 
-describe('ubah, hapus, ekspor', () => {
-  it('koreksi manual: persentase dihitung ulang dengan fungsi domain; tercatat di log', async () => {
-    const r = await prisma.rekapKehadiranGuru.findFirstOrThrow({
-      where: { guru_id: guruSabtu, minggu_ke: 2 },
+describe('koreksi manual', () => {
+  const ambilPekan2 = () =>
+    prisma.rekapKehadiranGuru.findFirstOrThrow({ where: { guru_id: guruSabtu, minggu_ke: 2 } });
+
+  it('wajib alasan; persentase dari fungsi domain; baris ditandai; tercatat di log', async () => {
+    const r = await ambilPekan2();
+    const tanpaAlasan = await admin.put(`${R}/${r.id}`, { total_jam_wajib: 3, total_jam_hadir: 2 });
+    expect(tanpaAlasan.status).toBe(400);
+    expect(
+      (
+        await admin.put(`${R}/${r.id}`, {
+          total_jam_wajib: 3,
+          total_jam_hadir: 2,
+          alasan_koreksi: '  ',
+        })
+      ).status,
+    ).toBe(400);
+
+    const nol = await admin.put(`${R}/${r.id}`, {
+      total_jam_wajib: 0,
+      total_jam_hadir: 2,
+      alasan_koreksi: 'Uji jam wajib nol',
     });
-    const res = await admin.put(`${R}/${r.id}`, { total_jam_wajib: 3, total_jam_hadir: 2 });
+    expect(nol.body.data.persentase_kehadiran).toBe(0);
+
+    const res = await manajemen.put(`${R}/${r.id}`, {
+      total_jam_wajib: 3,
+      total_jam_hadir: 2,
+      alasan_koreksi: 'Guru mengajar pengganti (contoh)',
+    });
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({
       total_jam_wajib: 3,
       total_jam_hadir: 2,
       persentase_kehadiran: 66.67,
+      dikoreksi_manual: true,
+      alasan_koreksi: 'Guru mengajar pengganti (contoh)',
+      nama_pengoreksi: 'Kepala Sekolah Contoh',
     });
-
-    const nol = await admin.put(`${R}/${r.id}`, { total_jam_wajib: 0, total_jam_hadir: 2 });
-    expect(nol.body.data.persentase_kehadiran).toBe(0);
+    expect(res.body.data.dikoreksi_pada).toEqual(expect.any(String));
 
     expect(
-      (await admin.put(`${R}/${r.id}`, { total_jam_wajib: -1, total_jam_hadir: 2 })).status,
+      (
+        await admin.put(`${R}/${r.id}`, {
+          total_jam_wajib: -1,
+          total_jam_hadir: 2,
+          alasan_koreksi: 'x',
+        })
+      ).status,
     ).toBe(400);
     expect(
-      (await admin.put(`${R}/99999999`, { total_jam_wajib: 1, total_jam_hadir: 1 })).status,
+      (
+        await admin.put(`${R}/99999999`, {
+          total_jam_wajib: 1,
+          total_jam_hadir: 1,
+          alasan_koreksi: 'x',
+        })
+      ).status,
     ).toBe(404);
     const log = await prisma.auditLog.findFirst({
       where: { aktivitas: 'UPDATE_REKAP', entity_id: String(r.id) },
+      orderBy: { id: 'desc' },
     });
     expect(log?.description).toContain('66.67%');
+    expect(log?.description).toContain('Alasan: Guru mengajar pengganti (contoh)');
   });
 
+  it('pratinjau sinkron menyebut jumlah baris terkoreksi', async () => {
+    const res = await manajemen.get(`${R}/sync/pratinjau?minggu_ke=2&tahun=2026`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ minggu_ke: 2, tahun: 2026, terkoreksi: 1 });
+    expect((await manajemen.get(`${R}/sync/pratinjau?minggu_ke=1&tahun=2026`)).body.data).toEqual({
+      minggu_ke: 1,
+      tahun: 2026,
+      terkoreksi: 0,
+    });
+    expect((await manajemen.get(`${R}/sync/pratinjau?minggu_ke=0&tahun=2026`)).status).toBe(400);
+    expect((await manajemen.get(`${R}/sync/pratinjau?minggu_ke=500&tahun=2036`)).status).toBe(422);
+  });
+
+  it('sinkron melewati baris terkoreksi; tercatat di log', async () => {
+    const res = await manajemen.post(`${R}/sync`, { minggu_ke: 2, tahun: 2026 });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ dilewati: 1, ditimpa: 0 });
+    const aktif = await prisma.guru.count({ where: { status: 'aktif' } });
+    expect(res.body.data.disinkronkan).toBe(aktif - 1);
+
+    const r = await ambilPekan2();
+    expect(r).toMatchObject({ total_jam_wajib: 3, total_jam_hadir: 2, dikoreksi_manual: true });
+    expect(keAngka(r.persentase_kehadiran)).toBe(66.67);
+    const log = await prisma.auditLog.findFirst({
+      where: { aktivitas: 'SYNC_REKAP' },
+      orderBy: { id: 'desc' },
+    });
+    expect(log?.description).toContain('1 baris koreksi manual dilewati');
+  });
+
+  it('hitung ulang otomatis dari perubahan kehadiran juga tidak menimpa koreksi', async () => {
+    const pengaturan = await ambilPengaturan(prisma);
+    await hitungUlangRekapTerdampak(prisma, pengaturan, [
+      { guru_id: guruSabtu, tanggal: '2026-10-27' },
+    ]);
+    expect(await ambilPekan2()).toMatchObject({ total_jam_wajib: 3, dikoreksi_manual: true });
+  });
+
+  it('timpa_koreksi: manajemen → 403; admin menimpa, tanda koreksi dihapus, tercatat di log', async () => {
+    const tolak = await manajemen.post(`${R}/sync`, {
+      minggu_ke: 2,
+      tahun: 2026,
+      timpa_koreksi: true,
+    });
+    expect(tolak.status).toBe(403);
+    expect((await ambilPekan2()).dikoreksi_manual).toBe(true);
+    expect(
+      (await admin.post(`${R}/sync`, { minggu_ke: 2, tahun: 2026, timpa_koreksi: 'ya' })).status,
+    ).toBe(400);
+
+    const res = await admin.post(`${R}/sync`, { minggu_ke: 2, tahun: 2026, timpa_koreksi: true });
+    expect(res.status).toBe(200);
+    expect(res.body.data).toMatchObject({ dilewati: 0, ditimpa: 1 });
+
+    const r = await ambilPekan2();
+    // Kembali ke hasil hitung: jadwal Senin 2 JP (hari efektif), tanpa kehadiran pekan 2.
+    expect(r).toMatchObject({
+      total_jam_wajib: 2,
+      total_jam_hadir: 0,
+      dikoreksi_manual: false,
+      alasan_koreksi: null,
+      dikoreksi_oleh: null,
+      dikoreksi_pada: null,
+    });
+    const log = await prisma.auditLog.findFirst({ where: { aktivitas: 'TIMPA_KOREKSI_REKAP' } });
+    expect(log?.description).toContain('Menimpa 1 baris');
+  });
+});
+
+describe('hapus, ekspor', () => {
   it('hapus → 204, lalu 404', async () => {
     const r = await prisma.rekapKehadiranGuru.findFirstOrThrow({
       where: { guru_id: guruSabtu, minggu_ke: 2 },
@@ -329,10 +441,10 @@ describe('ubah, hapus, ekspor', () => {
     expect(teks.startsWith(BOM)).toBe(true);
     const garis = teks.slice(1).split('\r\n').filter(Boolean);
     expect(garis[0]).toBe(
-      'Tahun,Pekan,Tanggal Mulai,Tanggal Selesai,Kode Guru,Nama Guru,Mata Pelajaran,Jam Wajib,Jam Hadir,Persentase Kehadiran',
+      'Tahun,Pekan,Tanggal Mulai,Tanggal Selesai,Kode Guru,Nama Guru,Mata Pelajaran,Jam Wajib,Jam Hadir,Persentase Kehadiran,Dikoreksi Manual,Alasan Koreksi,Dikoreksi Oleh',
     );
     expect(garis).toHaveLength(14);
-    expect(garis.find((g) => g.includes('UJIR1'))).toMatch(/,2,4,100\.00$/);
+    expect(garis.find((g) => g.includes('UJIR1'))).toMatch(/,2,4,100\.00,Tidak,,$/);
     const log = await prisma.auditLog.findFirst({ where: { aktivitas: 'EXPORT_REKAP' } });
     expect(log?.description).toContain('pekan 4/2026');
   });

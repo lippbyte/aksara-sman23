@@ -1,10 +1,12 @@
 import type {
   Halaman,
   HasilSyncRekap,
+  PekanRekap,
   PekanTersedia,
+  PratinjauSyncRekap,
   Rekap,
   Respons,
-  SyncRekapInput,
+  SyncRekapForm,
   UbahRekapInput,
 } from '@sms/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -44,10 +46,25 @@ function useSegarkan() {
   };
 }
 
+/** Jumlah baris terkoreksi manual pada pekan itu; dipakai dialog konfirmasi sinkron. */
+export function usePratinjauSinkron(pekan: PekanRekap | null) {
+  return useQuery({
+    queryKey: ['rekap', 'pratinjau', pekan],
+    queryFn: async () =>
+      (
+        await api.get<Respons<PratinjauSyncRekap>>(
+          `/rekap-kehadiran/sync/pratinjau${qs({ minggu_ke: pekan?.minggu_ke, tahun: pekan?.tahun })}`,
+        )
+      ).data,
+    enabled: pekan !== null,
+    staleTime: 0,
+  });
+}
+
 export function useSinkronRekap() {
   const segarkan = useSegarkan();
   return useMutation({
-    mutationFn: (data: SyncRekapInput) =>
+    mutationFn: (data: SyncRekapForm) =>
       api.post<Respons<HasilSyncRekap>>('/rekap-kehadiran/sync', data),
     onSuccess: segarkan,
   });

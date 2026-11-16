@@ -59,12 +59,14 @@ model User {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  kelas             Kelas?                    @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
-  kehadiran         Kehadiran[]
-  kehadiran_siswa   KehadiranSiswa[]
-  penilaian_kinerja PenilaianKinerjaBulanan[]
-  penilaian_mgmp    PenilaianMgmp[]
-  audit_logs        AuditLog[]
+  kelas                Kelas?                    @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+  kehadiran            Kehadiran[]
+  kehadiran_siswa      KehadiranSiswa[]
+  penilaian_kinerja    PenilaianKinerjaBulanan[]
+  penilaian_mgmp       PenilaianMgmp[]
+  penilaian_mgmp_siswa PenilaianMgmpSiswa[]
+  rekap_dikoreksi      RekapKehadiranGuru[]
+  audit_logs           AuditLog[]
 
   @@index([kelas_id])
   @@map("users")
@@ -82,16 +84,16 @@ model SekolahSettings {
   hari_efektif       Json
 
   /// Bobot penilaian kinerja bila skor manajemen terisi (jumlah 100).
-  bobot_kinerja_kehadiran    Decimal @default(50) @db.Decimal(5, 2)
-  bobot_kinerja_administrasi Decimal @default(30) @db.Decimal(5, 2)
-  bobot_kinerja_manajemen    Decimal @default(20) @db.Decimal(5, 2)
+  bobot_kinerja_kehadiran                    Decimal @default(50) @db.Decimal(5, 2)
+  bobot_kinerja_administrasi                 Decimal @default(30) @db.Decimal(5, 2)
+  bobot_kinerja_manajemen                    Decimal @default(20) @db.Decimal(5, 2)
   /// Bobot penilaian kinerja bila skor manajemen kosong atau 0 (jumlah 100).
   bobot_kinerja_kehadiran_tanpa_manajemen    Decimal @default(50) @db.Decimal(5, 2)
   bobot_kinerja_administrasi_tanpa_manajemen Decimal @default(50) @db.Decimal(5, 2)
   /// Bobot penilaian MGMP (jumlah 100).
-  bobot_mgmp_kehadiran    Decimal @default(40) @db.Decimal(5, 2)
-  bobot_mgmp_siswa        Decimal @default(30) @db.Decimal(5, 2)
-  bobot_mgmp_administrasi Decimal @default(30) @db.Decimal(5, 2)
+  bobot_mgmp_kehadiran                       Decimal @default(40) @db.Decimal(5, 2)
+  bobot_mgmp_siswa                           Decimal @default(30) @db.Decimal(5, 2)
+  bobot_mgmp_administrasi                    Decimal @default(30) @db.Decimal(5, 2)
 
   /// Pengisian penilaian dibuka pada N hari terakhir bulan.
   jendela_penilaian_hari Int      @default(3) @db.UnsignedTinyInt
@@ -107,11 +109,12 @@ model Kelas {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  users           User[]
-  siswa           Siswa[]
-  jadwal          JadwalMengajar[]
-  kehadiran       Kehadiran[]
-  kehadiran_siswa KehadiranSiswa[]
+  users                User[]
+  siswa                Siswa[]
+  jadwal               JadwalMengajar[]
+  kehadiran            Kehadiran[]
+  kehadiran_siswa      KehadiranSiswa[]
+  penilaian_mgmp_siswa PenilaianMgmpSiswa[]
 
   @@map("kelas")
 }
@@ -123,8 +126,9 @@ model Mgmp {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  guru      Guru[]
-  penilaian PenilaianMgmp[]
+  guru            Guru[]
+  penilaian       PenilaianMgmp[]
+  penilaian_siswa PenilaianMgmpSiswa[]
 
   @@map("mgmp")
 }
@@ -245,24 +249,32 @@ model KehadiranSiswa {
 // ─────────────────── Rekap dan penilaian ───────────────────
 
 model RekapKehadiranGuru {
-  id                   BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  guru_id              BigInt   @db.UnsignedBigInt
+  id                   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  guru_id              BigInt    @db.UnsignedBigInt
   /// Tahun kalender dari Senin pekan itu.
-  tahun                Int      @db.UnsignedSmallInt
-  minggu_ke            Int      @db.UnsignedSmallInt
+  tahun                Int       @db.UnsignedSmallInt
+  minggu_ke            Int       @db.UnsignedSmallInt
   /// Senin.
-  tanggal_mulai        DateTime @db.Date
+  tanggal_mulai        DateTime  @db.Date
   /// Hari efektif terakhir.
-  tanggal_selesai      DateTime @db.Date
-  total_jam_wajib      Int      @db.UnsignedInt
-  total_jam_hadir      Int      @db.UnsignedInt
-  persentase_kehadiran Decimal  @db.Decimal(5, 2)
-  created_at           DateTime @default(now())
-  updated_at           DateTime @updatedAt
+  tanggal_selesai      DateTime  @db.Date
+  total_jam_wajib      Int       @db.UnsignedInt
+  total_jam_hadir      Int       @db.UnsignedInt
+  persentase_kehadiran Decimal   @db.Decimal(5, 2)
+  /// Dikoreksi manual: sinkron dan hitung ulang otomatis melewati baris ini
+  /// kecuali admin memilih timpa_koreksi.
+  dikoreksi_manual     Boolean   @default(false)
+  alasan_koreksi       String?   @db.Text
+  dikoreksi_oleh       BigInt?   @db.UnsignedBigInt
+  dikoreksi_pada       DateTime?
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
 
-  guru Guru @relation(fields: [guru_id], references: [id], onDelete: Restrict)
+  guru       Guru  @relation(fields: [guru_id], references: [id], onDelete: Restrict)
+  pengoreksi User? @relation(fields: [dikoreksi_oleh], references: [id], onDelete: Restrict)
 
   @@unique([guru_id, tahun, minggu_ke])
+  @@index([dikoreksi_oleh])
   @@index([tahun, minggu_ke])
   @@index([tanggal_mulai, tanggal_selesai])
   @@map("rekap_kehadiran_guru")
@@ -297,6 +309,7 @@ model PenilaianMgmp {
   bulan             Int      @db.UnsignedTinyInt
   tahun             Int      @db.UnsignedSmallInt
   skor_kehadiran    Decimal  @default(0) @db.Decimal(5, 2)
+  /// Rata-rata penilaian_mgmp_siswa periode ini (0 bila belum ada kelas yang mengisi).
   skor_siswa        Decimal  @default(0) @db.Decimal(5, 2)
   skor_administrasi Decimal  @default(0) @db.Decimal(5, 2)
   skor_akhir        Decimal  @default(0) @db.Decimal(5, 2)
@@ -311,6 +324,29 @@ model PenilaianMgmp {
   @@unique([mgmp_id, bulan, tahun])
   @@index([tahun, bulan])
   @@map("penilaian_mgmp")
+}
+
+/// Skor siswa MGMP per kelas, diisi sekretaris kelas itu (satu baris per kelas per bulan).
+model PenilaianMgmpSiswa {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  mgmp_id    BigInt   @db.UnsignedBigInt
+  kelas_id   BigInt   @db.UnsignedBigInt
+  bulan      Int      @db.UnsignedTinyInt
+  tahun      Int      @db.UnsignedSmallInt
+  skor       Decimal  @db.Decimal(5, 2)
+  diisi_oleh BigInt   @db.UnsignedBigInt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  mgmp    Mgmp  @relation(fields: [mgmp_id], references: [id], onDelete: Restrict)
+  kelas   Kelas @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+  pengisi User  @relation(fields: [diisi_oleh], references: [id], onDelete: Restrict)
+
+  @@unique([mgmp_id, kelas_id, bulan, tahun])
+  @@index([tahun, bulan])
+  @@index([kelas_id])
+  @@index([diisi_oleh])
+  @@map("penilaian_mgmp_siswa")
 }
 
 // ───────────────────────── Jejak ─────────────────────────

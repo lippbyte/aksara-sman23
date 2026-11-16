@@ -27,6 +27,7 @@ import { catatAudit, type KonteksAudit } from '../../lib/audit';
 import { batalkanCacheDashboard } from '../../lib/cache';
 import { badRequest, businessRule, conflict, notFound } from '../../lib/errors';
 import { prisma, type Db } from '../../lib/prisma';
+import { akhiriSesiPengguna } from '../../lib/session';
 import { hashPassword } from '../auth/service';
 import * as repo from './repo';
 import type { HasilDaftar } from './repo';
@@ -267,20 +268,28 @@ export const users = {
     }
   },
 
-  /** Reset kata sandi oleh admin; sesi pengguna itu diakhiri. */
-  async resetPassword(id: number, passwordBaru: string, audit: KonteksAudit): Promise<void> {
+  /**
+   * Reset kata sandi oleh admin; semua sesi pengguna itu diakhiri. Bila admin mereset
+   * akunnya sendiri, sesi yang sedang dipakai dipertahankan.
+   */
+  async resetPassword(
+    id: number,
+    passwordBaru: string,
+    audit: KonteksAudit,
+    sesiSaatIni: string,
+  ): Promise<void> {
     const hash = await hashPassword(passwordBaru);
     await prisma.$transaction(async (tx) => {
       const akun = await repo.users.ambil(tx, id);
       if (!akun) throw notFound('Akun tidak ditemukan.');
       await repo.users.simpanPassword(tx, id, hash);
-      if (id !== audit.user_id) await repo.users.hapusSesi(tx, id);
+      const n = await akhiriSesiPengguna(tx, id, id === audit.user_id ? sesiSaatIni : undefined);
       await catatAudit(tx, audit, {
         module: 'Auth',
         aktivitas: 'RESET_PASSWORD',
         entity_type: 'users',
         entity_id: id,
-        description: `Mereset kata sandi akun "${akun.email}".`,
+        description: `Mereset kata sandi akun "${akun.email}"; ${n} sesi diakhiri.`,
       });
     });
   },

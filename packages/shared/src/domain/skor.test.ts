@@ -8,9 +8,27 @@ import {
   predikatMgmp,
   skorAkhirKinerja,
   skorAkhirMgmp,
+  skorSiswaMgmp,
 } from './skor';
 
 const BOBOT = BOBOT_DEFAULT.kinerja;
+
+describe('skorSiswaMgmp', () => {
+  it('belum ada kelas yang mengisi → 0', () => {
+    expect(skorSiswaMgmp([])).toBe(0);
+  });
+
+  it('rata-rata kelas yang sudah mengisi, dua desimal di akhir', () => {
+    expect(skorSiswaMgmp([80])).toBe(80);
+    expect(skorSiswaMgmp([80, 90])).toBe(85);
+    expect(skorSiswaMgmp([100, 100, 95])).toBe(98.33);
+    expect(skorSiswaMgmp([66.67, 66.67, 66.66])).toBe(66.67);
+  });
+
+  it('nilai di luar 0–100 dibatasi sebelum dirata-rata', () => {
+    expect(skorSiswaMgmp([120, 80])).toBe(90);
+  });
+});
 
 describe('bulatkan2 dan batasiSkor', () => {
   it('membulatkan setengah ke atas tanpa galat biner', () => {
@@ -21,7 +39,7 @@ describe('bulatkan2 dan batasiSkor', () => {
     expect(bulatkan2(100)).toBe(100);
   });
 
-  it('nilai sangat kecil dan bukan angka aman', () => {
+  it('nilai sangat kecil, NaN, dan tak hingga menjadi 0', () => {
     expect(bulatkan2(1e-7)).toBe(0);
     expect(bulatkan2(Number.NaN)).toBe(0);
     expect(bulatkan2(Number.POSITIVE_INFINITY)).toBe(0);

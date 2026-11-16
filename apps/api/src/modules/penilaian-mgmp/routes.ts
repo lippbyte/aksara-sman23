@@ -1,6 +1,8 @@
 import {
   periodeSchema,
   simpanPenilaianMgmpSchema,
+  simpanSkorSiswaMgmpSchema,
+  skorSiswaMgmpQuerySchema,
   syncPenilaianSchema,
   type PenilaianMgmpBaris,
 } from '@sms/shared';
@@ -9,13 +11,13 @@ import { catatAudit } from '../../lib/audit';
 import { keCsv, kirimCsv, type KolomCsv } from '../../lib/csv';
 import { namaPeriode } from '../../lib/penilaian';
 import { prisma } from '../../lib/prisma';
-import { requireAuth, requireRole } from '../../middleware/requireAuth';
+import { requireAuth, requireRole, scopeKelas } from '../../middleware/requireAuth';
 import { validate } from '../../middleware/validate';
 import * as service from './service';
 
 /**
  * Penilaian MGMP: admin, manajemen_guru, guru_penilai penuh;
- * sekretaris_kelas hanya melihat dan mengisi skor siswa (PROJECT-CONTEXT §4).
+ * sekretaris_kelas hanya melihat dan mengisi skor siswa KELASNYA (PROJECT-CONTEXT §4).
  */
 export const penilaianMgmpRouter = Router();
 penilaianMgmpRouter.use(
@@ -31,8 +33,26 @@ penilaianMgmpRouter.get(
 
 penilaianMgmpRouter.put(
   '/',
+  bukanSekretaris,
   validate({ body: simpanPenilaianMgmpSchema }, async ({ body, user, audit }) => ({
     data: await service.simpan(body, user, audit),
+  })),
+);
+
+/** Skor siswa per kelas: sekretaris hanya kelasnya; peran lain semua kelas. */
+penilaianMgmpRouter.get(
+  '/skor-siswa',
+  scopeKelas,
+  validate({ query: skorSiswaMgmpQuerySchema }, async ({ query, kelasScope }) => ({
+    data: await service.rincianSkorSiswa(query, kelasScope),
+  })),
+);
+
+penilaianMgmpRouter.put(
+  '/skor-siswa',
+  scopeKelas,
+  validate({ body: simpanSkorSiswaMgmpSchema }, async ({ body, user, kelasScope, audit }) => ({
+    data: await service.simpanSkorSiswa(body, user, kelasScope, audit),
   })),
 );
 
@@ -50,6 +70,7 @@ const KOLOM_CSV: KolomCsv<PenilaianMgmpBaris>[] = [
   { judul: 'Guru Aktif', nilai: (b) => b.jumlah_guru_aktif },
   { judul: 'Skor Kehadiran', nilai: (b) => angka2(b.skor_kehadiran) },
   { judul: 'Skor Siswa', nilai: (b) => angka2(b.skor_siswa) },
+  { judul: 'Kelas Mengisi', nilai: (b) => `${b.kelas_terisi} dari ${b.jumlah_kelas}` },
   { judul: 'Skor Administrasi', nilai: (b) => angka2(b.skor_administrasi) },
   { judul: 'Skor Akhir', nilai: (b) => angka2(b.skor_akhir) },
   { judul: 'Predikat', nilai: (b) => b.predikat ?? 'Belum dinilai' },

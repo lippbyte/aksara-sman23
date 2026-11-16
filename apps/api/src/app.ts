@@ -4,7 +4,7 @@ import { pinoHttp } from 'pino-http';
 import { isProduction, isTest } from './env';
 import { logger } from './lib/logger';
 import { prisma } from './lib/prisma';
-import { sessionMiddleware, tutupSessionStore } from './lib/session';
+import { batasSesi, sessionMiddleware, tutupSessionStore } from './lib/session';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { originCheck } from './middleware/originCheck';
 import { auditRouter } from './modules/audit/routes';
@@ -53,7 +53,7 @@ export function createApp() {
   v1.get('/sekolah/logo', logoSekolahHandler);
 
   // Mulai dari sini semua rute memakai sesi dan pemeriksaan asal permintaan.
-  v1.use(sessionMiddleware, originCheck);
+  v1.use(sessionMiddleware, batasSesi, originCheck);
   v1.use('/auth', buatAuthRouter());
   v1.use('/referensi', referensiRouter);
   v1.use('/dashboard', dashboardRouter);

@@ -17,6 +17,10 @@ declare global {
 declare module 'express-session' {
   interface SessionData {
     userId?: number;
+    /** Epoch ms saat masuk (batas umur sesi). */
+    masuk_pada?: number;
+    /** Epoch ms permintaan terakhir (batas diam). */
+    aktif_pada?: number;
   }
 }
 

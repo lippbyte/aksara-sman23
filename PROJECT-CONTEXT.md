@@ -57,7 +57,7 @@ Peran `viewer` ada di prototype tetapi tidak dipakai. **Tidak dibawa.**
 | Kehadiran siswa: tambah, ubah, hapus | ✅ | — | 🔒 | — |
 | Rekap kehadiran guru (lihat, sinkron, ubah, hapus, ekspor) | ✅ | ✅ | — | — |
 | Penilaian kinerja bulanan | ✅ | ✅ | — | ✅ |
-| Penilaian MGMP | ✅ | ✅ | ✅ hanya `skor_siswa` | ✅ |
+| Penilaian MGMP | ✅ | ✅ | 🔒 hanya skor siswa kelasnya (`penilaian_mgmp_siswa`) | ✅ |
 | Laporan rekap siswa + ekspor | ✅ | ✅ | — | — |
 | Log aktivitas | ✅ | — | — | — |
 | Pengaturan (guru, kelas, siswa, jadwal, MGMP, akun, sekolah) | ✅ | — | — | — |
@@ -85,13 +85,14 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
 - **kehadiran_siswa**: `siswa_id`, `kelas_id`, `tanggal`, `jam_ke` (default 1), `status` enum(`hadir`,`izin`,`sakit`,`alpa`), `keterangan`, `created_by`. Unik (`siswa_id`,`tanggal`,`jam_ke`).
 
 ### Rekap dan penilaian
-- **rekap_kehadiran_guru**: `guru_id`, `tahun`, `minggu_ke`, `tanggal_mulai` (Senin), `tanggal_selesai` (hari efektif terakhir), `total_jam_wajib`, `total_jam_hadir`, `persentase_kehadiran` DECIMAL(5,2). Unik (`guru_id`,`tahun`,`minggu_ke`).
+- **rekap_kehadiran_guru**: `guru_id`, `tahun`, `minggu_ke`, `tanggal_mulai` (Senin), `tanggal_selesai` (hari efektif terakhir), `total_jam_wajib`, `total_jam_hadir`, `persentase_kehadiran` DECIMAL(5,2), `dikoreksi_manual` (boolean, default false), `alasan_koreksi` (teks, nullable), `dikoreksi_oleh` (nullable FK users), `dikoreksi_pada` (nullable). Unik (`guru_id`,`tahun`,`minggu_ke`). *(Kolom koreksi baru, Fase 9; lihat 6.3.)*
 - **penilaian_kinerja_bulanan**: `guru_id`, `bulan`, `tahun`, `skor_kehadiran`, `skor_administrasi_avg`, `skor_manajemen_avg` (nullable), `skor_akhir`, `catatan`, `dinilai_oleh`. Unik (`guru_id`,`bulan`,`tahun`).
-- **penilaian_mgmp**: `mgmp_id`, `bulan`, `tahun`, `skor_kehadiran`, `skor_siswa`, `skor_administrasi`, `skor_akhir`, `catatan`, `dinilai_oleh`. Unik (`mgmp_id`,`bulan`,`tahun`).
+- **penilaian_mgmp**: `mgmp_id`, `bulan`, `tahun`, `skor_kehadiran`, `skor_siswa` (rata-rata `penilaian_mgmp_siswa` periode itu; tidak diisi langsung), `skor_administrasi`, `skor_akhir`, `catatan`, `dinilai_oleh` (penilai yang mengisi skor administrasi/catatan; pengisian skor siswa tidak mengubahnya). Unik (`mgmp_id`,`bulan`,`tahun`).
+- **penilaian_mgmp_siswa** *(baru, Fase 9)*: `mgmp_id` FK, `kelas_id` FK, `bulan`, `tahun`, `skor` DECIMAL(5,2), `diisi_oleh` FK users. Unik (`mgmp_id`,`kelas_id`,`bulan`,`tahun`). Satu baris per kelas per bulan; sekretaris hanya mengisi baris kelasnya. Nilai `penilaian_mgmp.skor_siswa` lama (satu skor per MGMP, tanpa kelas) tidak dipindahkan saat migrasi, melainkan dihapus menjadi 0 `[TIM: 16 Nov 2026]`.
 
 ### Jejak
 - **audit_logs**: `user_id`, `module` (mis. `Piket`, `Siswa`, `Rekap`, `Penilaian`, `Settings`, `Auth`), `aktivitas` (kode, mis. `CREATE_KEHADIRAN`), `entity_type`, `entity_id`, `description`, `ip_address`, `user_agent`.
-- **sessions**: penyimpanan sesi login di MySQL.
+- **sessions**: penyimpanan sesi login di MySQL. Sesi berakhir **8 jam sejak masuk** (tidak diperpanjang aktivitas) atau setelah **2 jam tanpa aktivitas**, mana yang lebih dulu. Saat kata sandi diganti sendiri atau direset admin, **semua sesi lain** pengguna itu diakhiri (sesi yang sedang dipakai untuk mengganti tetap berlaku) `[TIM: 16 Nov 2026]`.
 
 ### Tidak dibawa dari prototype
 - `rekap_kinerja_guru` dan `penilaian_kinerja_guru` (modul "Performance" lama) tumpang tindih dengan `rekap_kehadiran_guru` dan `penilaian_kinerja_bulanan`. **Dikonsolidasi.** `[PERLU DIKONFIRMASI]` bila tim ingin mempertahankan skor observasi.
@@ -116,6 +117,9 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
 - `total_jam_hadir` = jumlah `lama_jam` untuk status `Hadir` atau `Mendampingi` dalam rentang pekan.
 - `persentase_kehadiran` = `min(100, round(hadir / wajib × 100, 2))`; 0 bila jam wajib 0.
 - Sinkron massal: hitung ulang semua guru aktif untuk satu pekan.
+- **Koreksi manual** `[TIM: 16 Nov 2026]`: admin/manajemen boleh mengubah jam wajib dan jam hadir satu baris rekap dengan **alasan wajib**. Persentase tetap dihitung dengan rumus di atas. Baris ditandai `dikoreksi_manual` beserta alasan, pengoreksi, dan waktunya, lalu dicatat di log.
+- Sinkron **melewati** baris yang dikoreksi manual. Hanya **admin** yang boleh memilih `timpa_koreksi`; sebelum itu dialog konfirmasi menyebut jumlah baris yang akan ditimpa. Baris yang ditimpa kembali ke hasil hitung dan tanda koreksinya dihapus; penimpaan dicatat di log (`TIMPA_KOREKSI_REKAP`).
+- Hitung ulang otomatis karena perubahan kehadiran (6.1) juga melewati baris yang dikoreksi manual. `[ASUMSI, perlu dikonfirmasi]`
 
 ### 6.4 Penilaian kinerja guru bulanan
 - `skor_kehadiran` diisi otomatis = rata-rata `persentase_kehadiran` pekan-pekan yang **beririsan** dengan bulan itu. *(Perbaikan: prototype hanya menghitung pekan yang seluruhnya berada di dalam bulan.)*
@@ -128,8 +132,14 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
 - Aspek dan bobot penilaian **mengikuti ketentuan sekolah**. Sistem hanya mendokumentasikan, tidak memutuskan.
 
 ### 6.5 Penilaian MGMP bulanan
-- `skor_kehadiran` otomatis = rata-rata `persentase_kehadiran` guru aktif di MGMP itu, untuk pekan yang beririsan dengan bulan. *(Perbaikan: query prototype memakai kolom `bulan` yang tidak ada dan `orWhere` yang bocor.)*
-- `skor_siswa` diisi sekretaris kelas; `skor_administrasi` diisi admin/pimpinan.
+- `skor_kehadiran` otomatis = rata-rata `persentase_kehadiran` guru aktif di MGMP itu, untuk pekan yang beririsan dengan bulan. *(Perbaikan: query prototype memakai kolom `bulan` yang tidak ada dan `orWhere` yang bocor.)* Rinciannya `[TIM: 16 Nov 2026]`:
+  - skor tiap guru = rata-rata persentase pekan yang beririsan dengan bulan **dan** punya jam wajib > 0; skor MGMP = rata-rata skor guru;
+  - **hanya guru tanpa jam wajib yang dikeluarkan**: guru yang semua rekap pekannya berjam wajib 0, atau yang tidak punya rekap dan tidak punya jadwal pada hari efektif;
+  - guru **berjadwal** (jam wajib jadwal > 0) yang belum punya catatan/rekap pada bulan itu **dihitung 0**;
+  - pekan berjam wajib 0 milik guru yang punya pekan berjadwal lain dilewati, bukan dihitung 0%. `[ASUMSI, perlu dikonfirmasi]`
+- `skor_siswa` = rata-rata skor per kelas di `penilaian_mgmp_siswa` yang sudah diisi; 0 bila belum ada kelas yang mengisi. Sekretaris mengisi skor **kelasnya sendiri** (kelas dari akun, bukan dari form); admin/manajemen/penilai boleh mengisi untuk kelas yang dipilih. Halaman menampilkan "n dari m kelas sudah mengisi" (m = jumlah seluruh kelas `[ASUMSI]`). `[TIM: 16 Nov 2026]`
+- `skor_administrasi` dan `catatan` diisi admin/pimpinan/penilai.
+- Sinkron MGMP menghitung ulang `skor_kehadiran` dan `skor_siswa` lalu `skor_akhir`; isian penilai tidak berubah.
 - `skor_akhir` = kehadiran 40% + siswa 30% + administrasi 30% (default, dapat diatur).
 - Predikat: ≥90 Sangat Aktif · ≥75 Aktif · ≥60 Cukup Aktif · selain itu Kurang Aktif.
 

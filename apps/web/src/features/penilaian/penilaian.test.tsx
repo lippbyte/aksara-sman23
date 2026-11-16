@@ -1,4 +1,9 @@
-import type { DaftarPenilaian, PenilaianKinerjaBaris, PenilaianMgmpBaris } from '@sms/shared';
+import type {
+  DaftarPenilaian,
+  PenilaianKinerjaBaris,
+  PenilaianMgmpBaris,
+  SkorSiswaKelasBaris,
+} from '@sms/shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { pasangApiTiruan, tampilkanApp } from '@/test/bantuan';
@@ -132,40 +137,109 @@ describe('Penilaian MGMP', () => {
       nama_mapel: 'Matematika',
       jumlah_guru_aktif: 4,
       id: 3,
-      skor_kehadiran: null,
-      skor_siswa: 80,
+      skor_kehadiran: 88,
+      skor_siswa: 85,
+      kelas_terisi: 2,
+      jumlah_kelas: 6,
+      skor_kelas_saya: null,
       skor_administrasi: null,
       skor_akhir: null,
       predikat: null,
       catatan: null,
-      sudah_dinilai: true,
+      sudah_dinilai: false,
       nama_penilai: null,
       updated_at: '2026-11-28T03:00:00.000Z',
     },
   ];
+  const MGMP_SEKRETARIS: PenilaianMgmpBaris[] = [
+    { ...MGMP[0]!, skor_kehadiran: null, skor_siswa: null, skor_kelas_saya: 80 },
+  ];
+  const RINCIAN: SkorSiswaKelasBaris[] = [
+    {
+      kelas_id: 1,
+      nama_kelas: 'X-1',
+      skor: 80,
+      nama_pengisi: 'Sekretaris X-1 Contoh',
+      updated_at: null,
+    },
+    {
+      kelas_id: 2,
+      nama_kelas: 'X-2',
+      skor: 90,
+      nama_pengisi: 'Guru Penilai Contoh',
+      updated_at: null,
+    },
+    { kelas_id: 3, nama_kelas: 'XI-1', skor: null, nama_pengisi: null, updated_at: null },
+  ];
 
-  it('sekretaris: hanya kolom dan isian skor siswa; tanpa sinkron dan ekspor', async () => {
+  it('sekretaris: skor kelasnya dan "n dari m kelas"; mengisi lewat rute skor siswa tanpa kelas', async () => {
     const fetchTiruan = pasangApiTiruan('sekretaris_kelas', (url, init) => {
-      if (url.endsWith('/penilaian-mgmp') && init?.method === 'PUT')
-        return { body: { data: MGMP[0] } };
-      return url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP) } : undefined;
+      if (url.endsWith('/penilaian-mgmp/skor-siswa') && init?.method === 'PUT')
+        return { body: { data: MGMP_SEKRETARIS[0] } };
+      return url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP_SEKRETARIS) } : undefined;
     });
     tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
     const tabel = await screen.findByRole('table', { name: 'Penilaian MGMP November 2026' });
     const judul = within(tabel)
       .getAllByRole('columnheader')
       .map((h) => h.textContent);
-    expect(judul).toEqual(['MGMP', 'Skor siswa', 'Aksi']);
+    expect(judul).toEqual(['MGMP', 'Skor siswa X-1', 'Sudah mengisi', 'Aksi']);
+    expect(within(tabel).getAllByText('2 dari 6 kelas')[0]).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Sinkronkan/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Ekspor CSV' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Nilai MGMP Matematika' })[0]!);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Isi skor siswa MGMP Matematika' })[0]!);
     const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByLabelText(/Kelas/)).not.toBeInTheDocument();
     expect(within(dialog).queryByLabelText(/Skor administrasi/)).not.toBeInTheDocument();
-    expect(within(dialog).queryByLabelText(/Catatan/)).not.toBeInTheDocument();
-    fireEvent.change(within(dialog).getByLabelText(/^Skor siswa/), { target: { value: '85.5' } });
+    const isian = within(dialog).getByLabelText(/^Skor siswa kelas Anda/);
+    expect(isian).toHaveValue(80);
+    fireEvent.change(isian, { target: { value: '85.5' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Simpan' }));
 
+    await waitFor(() =>
+      expect(fetchTiruan.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(true),
+    );
+    const [url, init] = fetchTiruan.mock.calls.find(([, i]) => i?.method === 'PUT')!;
+    expect(String(url)).toContain('/penilaian-mgmp/skor-siswa');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      mgmp_id: 1,
+      bulan: 11,
+      tahun: 2026,
+      skor: 85.5,
+    });
+  });
+
+  it('manajemen: semua kolom, rata-rata skor siswa dengan "n dari m kelas", sinkron, dan ekspor', async () => {
+    pasangApiTiruan('manajemen_guru', (url) =>
+      url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP) } : undefined,
+    );
+    tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
+    const tabel = await screen.findByRole('table');
+    expect(within(tabel).getAllByRole('columnheader')).toHaveLength(8);
+    expect(within(tabel).getAllByText('85,00')[0]).toBeInTheDocument();
+    expect(within(tabel).getAllByText('2 dari 6 kelas')[0]).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sinkronkan skor otomatis' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ekspor CSV' })).toHaveAttribute(
+      'href',
+      '/api/v1/penilaian-mgmp/export?bulan=11&tahun=2026',
+    );
+  });
+
+  it('form nilai penilai tidak lagi berisi skor siswa', async () => {
+    const fetchTiruan = pasangApiTiruan('guru_penilai', (url, init) => {
+      if (url.endsWith('/penilaian-mgmp') && init?.method === 'PUT')
+        return { body: { data: MGMP[0] } };
+      return url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP) } : undefined;
+    });
+    tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Nilai MGMP Matematika' }))[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByLabelText(/Skor siswa/)).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText('Skor administrasi'), {
+      target: { value: '90' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Simpan' }));
     await waitFor(() =>
       expect(fetchTiruan.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(true),
     );
@@ -174,21 +248,48 @@ describe('Penilaian MGMP', () => {
       mgmp_id: 1,
       bulan: 11,
       tahun: 2026,
-      skor_siswa: 85.5,
+      skor_administrasi: 90,
+      catatan: null,
     });
   });
 
-  it('manajemen: semua kolom, sinkron, dan ekspor tersedia', async () => {
-    pasangApiTiruan('manajemen_guru', (url) =>
-      url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP) } : undefined,
-    );
+  it('penilai: rincian per kelas dan mengisi skor untuk kelas yang dipilih (kelas wajib)', async () => {
+    const fetchTiruan = pasangApiTiruan('guru_penilai', (url, init) => {
+      if (url.endsWith('/penilaian-mgmp/skor-siswa') && init?.method === 'PUT')
+        return { body: { data: MGMP[0] } };
+      if (url.includes('/penilaian-mgmp/skor-siswa?')) return { body: { data: RINCIAN } };
+      return url.includes('/penilaian-mgmp?') ? { body: daftar(MGMP) } : undefined;
+    });
     tampilkanApp('/penilaian-mgmp?bulan=11&tahun=2026');
-    const tabel = await screen.findByRole('table');
-    expect(within(tabel).getAllByRole('columnheader')).toHaveLength(8);
-    expect(screen.getByRole('button', { name: 'Sinkronkan skor kehadiran' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ekspor CSV' })).toHaveAttribute(
-      'href',
-      '/api/v1/penilaian-mgmp/export?bulan=11&tahun=2026',
+    fireEvent.click(
+      (await screen.findAllByRole('button', { name: 'Skor siswa per kelas MGMP Matematika' }))[0]!,
     );
+    const dialog = await screen.findByRole('dialog', { name: 'Skor siswa MGMP Matematika' });
+    const rincian = await within(dialog).findByRole('table', { name: 'Skor siswa per kelas' });
+    expect(within(rincian).getByText('Sekretaris X-1 Contoh')).toBeInTheDocument();
+    expect(within(rincian).getByText('Belum mengisi')).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText(/^Skor siswa kelas ini/), {
+      target: { value: '75' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Simpan' }));
+    expect(await within(dialog).findByText('Kelas wajib dipilih.')).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByLabelText(/^Kelas/), { target: { value: '3' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Skor siswa kelas ini/), {
+      target: { value: '75' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Simpan' }));
+    await waitFor(() =>
+      expect(fetchTiruan.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(true),
+    );
+    const [, init] = fetchTiruan.mock.calls.find(([, i]) => i?.method === 'PUT')!;
+    expect(JSON.parse(String(init?.body))).toEqual({
+      mgmp_id: 1,
+      bulan: 11,
+      tahun: 2026,
+      kelas_id: 3,
+      skor: 75,
+    });
   });
 });

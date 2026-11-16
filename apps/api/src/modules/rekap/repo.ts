@@ -4,6 +4,7 @@ import { prisma, type Db } from '../../lib/prisma';
 
 const include = {
   guru: { select: { kode_guru: true, nama_guru: true, mata_pelajaran: true } },
+  pengoreksi: { select: { name: true } },
 } as const;
 
 type Baris = Awaited<
@@ -24,6 +25,10 @@ function keRekap(r: Baris): Rekap {
     total_jam_wajib: r.total_jam_wajib,
     total_jam_hadir: r.total_jam_hadir,
     persentase_kehadiran: keAngka(r.persentase_kehadiran),
+    dikoreksi_manual: r.dikoreksi_manual,
+    alasan_koreksi: r.alasan_koreksi,
+    nama_pengoreksi: r.pengoreksi?.name ?? null,
+    dikoreksi_pada: r.dikoreksi_pada ? r.dikoreksi_pada.toISOString() : null,
     updated_at: r.updated_at.toISOString(),
   };
 }
@@ -77,7 +82,15 @@ export async function ambil(db: Db, id: number): Promise<Rekap | null> {
 export async function ubah(
   db: Db,
   id: number,
-  data: { total_jam_wajib: number; total_jam_hadir: number; persentase_kehadiran: number },
+  data: {
+    total_jam_wajib: number;
+    total_jam_hadir: number;
+    persentase_kehadiran: number;
+    dikoreksi_manual: boolean;
+    alasan_koreksi: string;
+    dikoreksi_oleh: number;
+    dikoreksi_pada: Date;
+  },
 ): Promise<Rekap> {
   return keRekap(await db.rekapKehadiranGuru.update({ where: { id }, data, include }));
 }

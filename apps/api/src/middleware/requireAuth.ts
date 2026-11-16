@@ -11,7 +11,11 @@ import { NAMA_COOKIE_SESI, OPSI_HAPUS_COOKIE } from '../lib/session';
  */
 export const requireAuth: RequestHandler = async (req, res, next) => {
   const userId = req.session.userId;
-  if (!userId) throw unauthorized();
+  if (!userId) {
+    throw unauthorized(
+      res.locals.sesiBerakhir === true ? 'Sesi berakhir. Silakan masuk kembali.' : undefined,
+    );
+  }
 
   const u = await prisma.user.findUnique({
     where: { id: userId },

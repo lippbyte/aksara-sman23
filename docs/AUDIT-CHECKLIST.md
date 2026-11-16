@@ -1,6 +1,7 @@
 # Daftar Periksa Audit Teknis
 
-School Management System (nama kerja) · **In Development** · disusun 16 November 2026 (Fase 8)
+School Management System (nama kerja) · **In Development** · disusun 16 November 2026 (Fase 8),
+diperbarui Fase 9
 
 Dokumen ini mencatat hasil pemeriksaan internal tim pengembang sebelum audit teknis. Isinya
 **bukan** pernyataan bahwa sistem aman atau sesuai regulasi. Audit teknis independen dan
@@ -18,7 +19,8 @@ Status: **Sudah** = diterapkan dan ada test/bukti · **Belum** = belum dikerjaka
 | `kelas_id` sekretaris diambil dari sesi, bukan isian form                        | Sudah  | Test "kelas selalu dari akun" di kehadiran guru dan siswa                                                                                                  |
 | `created_by` / `dinilai_oleh` selalu dari sesi                                   | Sudah  | Test `created_by: 999` diabaikan (perbaikan §8.5)                                                                                                          |
 | Kehadiran siswa tidak terbuka untuk semua pengguna                               | Sudah  | `guru_penilai` → 403 (perbaikan §8.6)                                                                                                                      |
-| Sekretaris hanya mengisi `skor_siswa` MGMP                                       | Sudah  | Test 403 bila mengirim isian lain                                                                                                                          |
+| Sekretaris hanya mengisi skor siswa MGMP untuk kelasnya (`penilaian_mgmp_siswa`) | Sudah  | Test: `kelas_id` dari form diabaikan; isian penilai → 403; rincian per kelas hanya kelasnya                                                                |
+| Menimpa rekap yang dikoreksi manual hanya oleh admin                             | Sudah  | Test `timpa_koreksi` manajemen → 403; penimpaan tercatat `TIMPA_KOREKSI_REKAP`                                                                             |
 | Menu UI hanya cermin; halaman di luar hak menampilkan pesan, tanpa memanggil API | Sudah  | Test web `PerluPeran`                                                                                                                                      |
 | Admin tidak bisa menonaktifkan/menghapus/menurunkan peran akun sendiri           | Sudah  | Test 422                                                                                                                                                   |
 | Pengisian penilaian di luar jendela oleh admin tercatat terpisah                 | Sudah  | Log `PENILAIAN_DI_LUAR_JENDELA`                                                                                                                            |
@@ -33,8 +35,8 @@ Status: **Sudah** = diterapkan dan ada test/bukti · **Belum** = belum dikerjaka
 | ID sesi diregenerasi saat login                                                    | Sudah           | Test regenerasi                                                                           |
 | Sesi berakhir saat logout, akun dinonaktifkan, atau sandi direset admin            | Sudah           | Test                                                                                      |
 | Batas percobaan login 5×/15 menit per IP+email (hanya yang gagal)                  | Sudah           | Test 429                                                                                  |
-| Batas umur sesi 8 jam (bergulir)                                                   | Sudah           | ASUMSI angka 8 jam; konfirmasi tim                                                        |
-| Sesi lain milik pengguna diakhiri saat ia mengganti sandinya sendiri               | Perlu keputusan | Saat ini sesi lain tetap aktif                                                            |
+| Sesi berakhir 8 jam sejak masuk (tidak bergulir) atau 2 jam tanpa aktivitas        | Sudah           | Test dengan jam palsu (`auth.test.ts`); keputusan tim 16 Nov 2026                         |
+| Semua sesi lain pengguna diakhiri saat sandi diganti sendiri atau direset admin    | Sudah           | Test dua perangkat; sesi yang sedang dipakai tetap berlaku                                |
 | Kebijakan kata sandi (minimal 8 karakter)                                          | Perlu keputusan | Panjang/kompleksitas mengikuti keputusan sekolah                                          |
 | HTTPS/TLS di server                                                                | Belum           | Bergantung target hosting (open item §12.5); `trust proxy` sudah disiapkan untuk produksi |
 | Penguncian akun setelah banyak kegagalan (selain rate limit)                       | Perlu keputusan |                                                                                           |

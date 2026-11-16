@@ -86,25 +86,51 @@ export function rataRata(nilai: readonly number[]): number {
   return bulatkan2(nilai.reduce((s, n) => s + n, 0) / nilai.length);
 }
 
+/** Data kehadiran satu guru aktif anggota MGMP untuk `skorKehadiranMgmp`. */
+export interface KehadiranGuruMgmp {
+  /** Jam wajib per pekan menurut jadwal saat ini (hari efektif saja, `totalJamWajib`). */
+  jam_wajib_jadwal: number;
+  /** Rekap pekan guru itu (cukup yang beririsan dengan bulan; sisanya disaring di sini). */
+  rekap: readonly (RekapPekanRingkas & { total_jam_wajib: number })[];
+}
+
 /**
- * Skor kehadiran MGMP (§6.5): rata-rata kehadiran guru aktif anggota MGMP pada pekan
- * yang beririsan dengan bulan.
+ * Skor kehadiran bulanan satu guru untuk MGMP; `null` bila guru tidak punya jam wajib
+ * pada bulan itu (tidak ikut dirata-rata).
  *
- * ASUMSI: dihitung sebagai rata-rata dari skor kehadiran bulanan tiap guru
- * (`rataRataBulanan`), hanya untuk guru yang punya rekap pada bulan itu. Guru tanpa
- * rekap tidak dihitung sebagai 0. Pembulatan hanya di hasil akhir.
+ * - Pekan yang dihitung: beririsan dengan bulan DAN punya jam wajib > 0.
+ * - Ada rekap pekan, tetapi semuanya jam wajib 0 → `null`.
+ * - Tidak ada rekap sama sekali: berjadwal (jam wajib jadwal > 0) → 0; tidak berjadwal → `null`.
  *
- * @param rekapPerGuru rekap pekan tiap guru aktif anggota MGMP.
+ * ASUMSI: pekan dengan jam wajib 0 milik guru yang punya pekan lain berjadwal dilewati,
+ * bukan dihitung 0%.
+ */
+export function skorKehadiranGuruMgmp(
+  guru: KehadiranGuruMgmp,
+  bulan: number,
+  tahun: number,
+): number | null {
+  const pekan = pekanBeririsanBulan(guru.rekap, bulan, tahun);
+  if (pekan.length === 0) return guru.jam_wajib_jadwal > 0 ? 0 : null;
+  const berjadwal = pekan.filter((r) => r.total_jam_wajib > 0);
+  if (berjadwal.length === 0) return null;
+  return berjadwal.reduce((s, r) => s + r.persentase_kehadiran, 0) / berjadwal.length;
+}
+
+/**
+ * Skor kehadiran MGMP (§6.5): rata-rata skor kehadiran bulanan guru aktif anggota MGMP
+ * (`skorKehadiranGuruMgmp`). Hanya guru TANPA jam wajib yang dikeluarkan; guru berjadwal
+ * yang belum punya catatan/rekap dihitung 0. Pembulatan hanya di hasil akhir; 0 bila
+ * tidak ada guru yang dihitung.
  */
 export function skorKehadiranMgmp(
-  rekapPerGuru: readonly (readonly RekapPekanRingkas[])[],
+  guru: readonly KehadiranGuruMgmp[],
   bulan: number,
   tahun: number,
 ): number {
-  const perGuru = rekapPerGuru
-    .map((rekap) => pekanBeririsanBulan(rekap, bulan, tahun))
-    .filter((pekan) => pekan.length > 0)
-    .map((pekan) => pekan.reduce((s, r) => s + r.persentase_kehadiran, 0) / pekan.length);
+  const perGuru = guru
+    .map((g) => skorKehadiranGuruMgmp(g, bulan, tahun))
+    .filter((s): s is number => s !== null);
   if (perGuru.length === 0) return 0;
   return bulatkan2(perGuru.reduce((s, n) => s + n, 0) / perGuru.length);
 }

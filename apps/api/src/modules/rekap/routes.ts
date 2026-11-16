@@ -1,5 +1,6 @@
 import {
   idParamSchema,
+  pekanRekapSchema,
   rekapFilterSchema,
   rekapQuerySchema,
   syncRekapSchema,
@@ -47,6 +48,9 @@ const KOLOM_CSV: KolomCsv<Rekap>[] = [
   { judul: 'Jam Wajib', nilai: (r) => r.total_jam_wajib },
   { judul: 'Jam Hadir', nilai: (r) => r.total_jam_hadir },
   { judul: 'Persentase Kehadiran', nilai: (r) => r.persentase_kehadiran.toFixed(2) },
+  { judul: 'Dikoreksi Manual', nilai: (r) => r.dikoreksi_manual },
+  { judul: 'Alasan Koreksi', nilai: (r) => r.alasan_koreksi },
+  { judul: 'Dikoreksi Oleh', nilai: (r) => r.nama_pengoreksi },
 ];
 
 function uraianFilter(f: RekapFilter): string {
@@ -80,18 +84,28 @@ rekapRouter.get(
   }),
 );
 
+rekapRouter.get(
+  '/sync/pratinjau',
+  validate({ query: pekanRekapSchema }, async ({ query }) => ({
+    data: await service.pratinjauSinkron(query),
+  })),
+);
+
 rekapRouter.post(
   '/sync',
-  validate({ body: syncRekapSchema }, async ({ body, audit }) => ({
-    data: await service.sinkron(body, audit),
+  validate({ body: syncRekapSchema }, async ({ body, user, audit }) => ({
+    data: await service.sinkron(body, user, audit),
   })),
 );
 
 rekapRouter.put(
   '/:id',
-  validate({ params: idParamSchema, body: ubahRekapSchema }, async ({ params, body, audit }) => ({
-    data: await service.ubah(params.id, body, audit),
-  })),
+  validate(
+    { params: idParamSchema, body: ubahRekapSchema },
+    async ({ params, body, user, audit }) => ({
+      data: await service.ubah(params.id, body, user, audit),
+    }),
+  ),
 );
 
 rekapRouter.delete(

@@ -401,12 +401,4 @@ export const users = {
   async hapus(db: Db, id: number): Promise<void> {
     await db.user.delete({ where: { id } });
   },
-  async hapusSesi(db: Db, id: number): Promise<void> {
-    // Isi sesi berbentuk JSON dengan `"userId":<id>`; sesi pengguna itu diakhiri.
-    await db.session.deleteMany({
-      where: {
-        OR: [{ data: { contains: `"userId":${id},` } }, { data: { contains: `"userId":${id}}` } }],
-      },
-    });
-  },
 };

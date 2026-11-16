@@ -44,6 +44,17 @@ export interface SkorMgmp {
   skor_administrasi: number;
 }
 
+/**
+ * Skor siswa MGMP (§6.5): rata-rata skor yang sudah diisi sekretaris tiap kelas
+ * (`penilaian_mgmp_siswa`). Kelas yang belum mengisi tidak ikut dirata-rata; 0 bila
+ * belum ada kelas yang mengisi. Pembulatan hanya di hasil akhir.
+ */
+export function skorSiswaMgmp(skorPerKelas: readonly number[]): number {
+  if (skorPerKelas.length === 0) return 0;
+  const jumlah = skorPerKelas.reduce((s, n) => s + batasiSkor(n), 0);
+  return bulatkan2(jumlah / skorPerKelas.length);
+}
+
 /** Skor akhir MGMP (§6.5): kehadiran + siswa + administrasi (default 40/30/30). */
 export function skorAkhirMgmp(skor: SkorMgmp, bobot: BobotMgmp): number {
   const nilai =

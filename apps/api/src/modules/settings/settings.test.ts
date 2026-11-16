@@ -364,14 +364,18 @@ describe('akun', () => {
       nama_kelas: 'XI-1',
     });
 
-    // Pengguna masuk, lalu admin mereset kata sandinya: sesi lama berakhir.
+    // Pengguna masuk di dua perangkat, lalu admin mereset kata sandinya: semua sesinya berakhir.
     const pengguna = new Klien(app);
+    const pengguna2 = new Klien(app);
     expect((await pengguna.masuk(dasar.email, dasar.password)).status).toBe(200);
+    expect((await pengguna2.masuk(dasar.email, dasar.password)).status).toBe(200);
     const reset = await admin.post(`${S}/users/${id}/reset-password`, {
       password_baru: 'kata-sandi-reset-2',
     });
     expect(reset.status).toBe(204);
     expect((await pengguna.get('/api/v1/auth/me')).status).toBe(401);
+    expect((await pengguna2.get('/api/v1/auth/me')).status).toBe(401);
+    expect((await admin.get('/api/v1/auth/me')).status).toBe(200);
     expect((await new Klien(app).masuk(dasar.email, dasar.password)).status).toBe(401);
     expect((await new Klien(app).masuk(dasar.email, 'kata-sandi-reset-2')).status).toBe(200);
 
@@ -382,6 +386,31 @@ describe('akun', () => {
     const hapus = await admin.delete(`${S}/users/${id}`);
     expect(hapus.status).toBe(409);
     expect(hapus.body.error.message).toContain('Nonaktifkan');
+  });
+
+  it('admin mereset kata sandinya sendiri: sesi yang dipakai tetap, sesi lain berakhir', async () => {
+    const email = 'admin.kedua@contoh.test';
+    const buat = await admin.post(`${S}/users`, {
+      ...dasar,
+      name: 'Admin Kedua Contoh',
+      email,
+      role: 'admin',
+      kelas_id: null,
+    });
+    expect(buat.status).toBe(201);
+    const idAdmin2 = buat.body.data.id;
+
+    const dipakai = new Klien(app);
+    const lain = new Klien(app);
+    expect((await dipakai.masuk(email, dasar.password)).status).toBe(200);
+    expect((await lain.masuk(email, dasar.password)).status).toBe(200);
+
+    const reset = await dipakai.post(`${S}/users/${idAdmin2}/reset-password`, {
+      password_baru: 'kata-sandi-reset-3',
+    });
+    expect(reset.status).toBe(204);
+    expect((await dipakai.get('/api/v1/auth/me')).status).toBe(200);
+    expect((await lain.get('/api/v1/auth/me')).status).toBe(401);
   });
 
   it('akun tanpa riwayat bisa dihapus', async () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { RentangPekan } from '../domain/pekan';
 import { paginationQuerySchema } from './common';
-import { idOpsionalQuery, tanggalOpsionalQuery, teksOpsionalQuery } from './dasar';
+import { idOpsionalQuery, tanggalOpsionalQuery, teksOpsionalQuery, teksWajib } from './dasar';
 
 const mingguKeSchema = z.coerce
   .number({ error: 'Pekan wajib dipilih.' })
@@ -59,9 +59,26 @@ export type RekapQuery = z.infer<typeof rekapQuerySchema>;
 export const rekapFilterSchema = z.object(filterRekap).superRefine(periksaFilter);
 export type RekapFilter = z.infer<typeof rekapFilterSchema>;
 
-/** Sinkron massal satu pekan untuk semua guru aktif (§6.3). */
-export const syncRekapSchema = z.object({ minggu_ke: mingguKeSchema, tahun: tahunSchema });
+/** Satu pekan rekap. */
+export const pekanRekapSchema = z.object({ minggu_ke: mingguKeSchema, tahun: tahunSchema });
+export type PekanRekap = z.infer<typeof pekanRekapSchema>;
+
+/**
+ * Sinkron massal satu pekan untuk semua guru aktif (§6.3). Baris yang dikoreksi manual
+ * dilewati, kecuali `timpa_koreksi` = true (hanya admin, diperiksa di server).
+ */
+export const syncRekapSchema = pekanRekapSchema.extend({
+  timpa_koreksi: z.boolean({ error: 'Pilihan timpa koreksi tidak valid.' }).default(false),
+});
 export type SyncRekapInput = z.infer<typeof syncRekapSchema>;
+export type SyncRekapForm = z.input<typeof syncRekapSchema>;
+
+/** Pratinjau sebelum sinkron: jumlah baris terkoreksi yang akan dilewati atau ditimpa. */
+export interface PratinjauSyncRekap {
+  minggu_ke: number;
+  tahun: number;
+  terkoreksi: number;
+}
 
 const jamSchema = (label: string) =>
   z
@@ -71,12 +88,13 @@ const jamSchema = (label: string) =>
     .max(200, `${label} maksimal 200.`);
 
 /**
- * Koreksi manual jam wajib dan jam hadir. Persentase selalu dihitung ulang dengan
- * fungsi domain, tidak diisi langsung.
+ * Koreksi manual jam wajib dan jam hadir, wajib dengan alasan. Persentase selalu dihitung
+ * ulang dengan fungsi domain, tidak diisi langsung.
  */
 export const ubahRekapSchema = z.object({
   total_jam_wajib: jamSchema('Jam wajib'),
   total_jam_hadir: jamSchema('Jam hadir'),
+  alasan_koreksi: teksWajib('Alasan koreksi', 500),
 });
 export type UbahRekapInput = z.infer<typeof ubahRekapSchema>;
 
@@ -93,6 +111,11 @@ export interface Rekap {
   total_jam_wajib: number;
   total_jam_hadir: number;
   persentase_kehadiran: number;
+  /** Dikoreksi manual: sinkron melewati baris ini kecuali admin memilih menimpa. */
+  dikoreksi_manual: boolean;
+  alasan_koreksi: string | null;
+  nama_pengoreksi: string | null;
+  dikoreksi_pada: string | null;
   updated_at: string;
 }
 
@@ -105,5 +128,10 @@ export interface PekanTersedia extends RentangPekan {
 
 export interface HasilSyncRekap {
   pekan: RentangPekan;
+  /** Baris yang ditulis ulang (termasuk yang ditimpa). */
   disinkronkan: number;
+  /** Baris terkoreksi manual yang dibiarkan. */
+  dilewati: number;
+  /** Baris terkoreksi manual yang ditimpa (timpa_koreksi). */
+  ditimpa: number;
 }

@@ -5,19 +5,23 @@ import {
   tahunPekan,
   type Halaman,
   type HasilSyncRekap,
+  type PekanRekap,
   type PekanTersedia,
+  type PenggunaSesi,
+  type PratinjauSyncRekap,
   type Rekap,
   type RekapQuery,
+  type RentangPekan,
   type SyncRekapInput,
   type UbahRekapInput,
 } from '@sms/shared';
 import { catatAudit, type KonteksAudit } from '../../lib/audit';
 import { batalkanCacheDashboard } from '../../lib/cache';
-import { businessRule, notFound } from '../../lib/errors';
+import { businessRule, forbidden, notFound } from '../../lib/errors';
 import { prisma } from '../../lib/prisma';
-import { ambilPengaturan } from '../../lib/sekolah';
+import { ambilPengaturan, type PengaturanSekolah } from '../../lib/sekolah';
 import { hariIni } from '../../lib/waktu';
-import { hitungUlangRekapPekan } from './hitung';
+import { hitungTerkoreksi, hitungUlangRekapPekan } from './hitung';
 import * as repo from './repo';
 
 export async function daftar(q: RekapQuery): Promise<Halaman<Rekap>> {
@@ -62,13 +66,7 @@ export async function daftarPekan(): Promise<PekanTersedia[]> {
   return [...peta.values()].sort((a, b) => b.tahun - a.tahun || b.minggu_ke - a.minggu_ke);
 }
 
-/**
- * Sinkron massal: hitung ulang satu pekan untuk SEMUA guru aktif dengan query agregat
- * (`GROUP BY guru_id`), bukan loop per guru (§6.3, perbaikan §8.9).
- */
-export async function sinkron(input: SyncRekapInput, audit: KonteksAudit): Promise<HasilSyncRekap> {
-  const pengaturan = await ambilPengaturan(prisma);
-
+function periksaPekan(input: PekanRekap, pengaturan: PengaturanSekolah): RentangPekan {
   let pekan;
   try {
     // Pasangan (minggu_ke, tahun) diperiksa terhadap kalender (perbaikan §8.1).
@@ -80,41 +78,97 @@ export async function sinkron(input: SyncRekapInput, audit: KonteksAudit): Promi
   if (pekan.tanggal_mulai > hariIni()) {
     throw businessRule(`Pekan ${pekan.minggu_ke} belum dimulai.`);
   }
+  return pekan;
+}
 
-  const disinkronkan = await prisma.$transaction(async (tx) => {
+/** Jumlah baris terkoreksi manual pada pekan itu (untuk dialog konfirmasi sinkron). */
+export async function pratinjauSinkron(input: PekanRekap): Promise<PratinjauSyncRekap> {
+  const pengaturan = await ambilPengaturan(prisma);
+  const pekan = periksaPekan(input, pengaturan);
+  const guru = await repo.guruAktif(prisma);
+  return {
+    minggu_ke: pekan.minggu_ke,
+    tahun: pekan.tahun,
+    terkoreksi: await hitungTerkoreksi(prisma, pekan, guru),
+  };
+}
+
+/**
+ * Sinkron massal: hitung ulang satu pekan untuk SEMUA guru aktif dengan query agregat
+ * (`GROUP BY guru_id`), bukan loop per guru (§6.3, perbaikan §8.9).
+ * Baris terkoreksi manual dilewati; `timpa_koreksi` hanya untuk admin.
+ */
+export async function sinkron(
+  input: SyncRekapInput,
+  user: PenggunaSesi,
+  audit: KonteksAudit,
+): Promise<HasilSyncRekap> {
+  if (input.timpa_koreksi && user.role !== 'admin') {
+    throw forbidden('Hanya admin yang boleh menimpa rekap yang sudah dikoreksi manual.');
+  }
+  const pengaturan = await ambilPengaturan(prisma);
+  const pekan = periksaPekan(input, pengaturan);
+
+  const hasil = await prisma.$transaction(async (tx) => {
     const guru = await repo.guruAktif(tx);
-    const n = await hitungUlangRekapPekan(tx, pengaturan, guru, pekan);
+    const h = await hitungUlangRekapPekan(tx, pengaturan, guru, pekan, {
+      timpaKoreksi: input.timpa_koreksi,
+    });
+    const rincian = h.ditimpa
+      ? `; ${h.ditimpa} baris koreksi manual DITIMPA`
+      : h.dilewati
+        ? `; ${h.dilewati} baris koreksi manual dilewati`
+        : '';
     await catatAudit(tx, audit, {
       module: 'Rekap',
       aktivitas: 'SYNC_REKAP',
       entity_type: 'rekap_kehadiran_guru',
       entity_id: `${pekan.tahun}-${pekan.minggu_ke}`,
-      description: `Sinkron rekap pekan ${pekan.minggu_ke} (${pekan.tanggal_mulai} s.d. ${pekan.tanggal_selesai}) untuk ${n} guru aktif.`,
+      description: `Sinkron rekap pekan ${pekan.minggu_ke} (${pekan.tanggal_mulai} s.d. ${pekan.tanggal_selesai}): ${h.ditulis} baris ditulis${rincian}.`,
     });
-    return n;
+    if (h.ditimpa > 0) {
+      await catatAudit(tx, audit, {
+        module: 'Rekap',
+        aktivitas: 'TIMPA_KOREKSI_REKAP',
+        entity_type: 'rekap_kehadiran_guru',
+        entity_id: `${pekan.tahun}-${pekan.minggu_ke}`,
+        description: `Menimpa ${h.ditimpa} baris rekap yang dikoreksi manual pada pekan ${pekan.minggu_ke}/${pekan.tahun} dengan hasil sinkron.`,
+      });
+    }
+    return h;
   });
   batalkanCacheDashboard();
-  return { pekan, disinkronkan };
+  return { pekan, disinkronkan: hasil.ditulis, dilewati: hasil.dilewati, ditimpa: hasil.ditimpa };
 }
 
 /**
- * Koreksi manual jam wajib/hadir. Persentase dihitung ulang dengan fungsi domain.
- * ASUMSI: sinkron berikutnya untuk pekan itu menimpa koreksi manual.
+ * Koreksi manual jam wajib/hadir dengan alasan. Persentase dihitung ulang dengan fungsi
+ * domain. Baris ditandai `dikoreksi_manual` sehingga sinkron berikutnya melewatinya.
  */
-export async function ubah(id: number, input: UbahRekapInput, audit: KonteksAudit): Promise<Rekap> {
+export async function ubah(
+  id: number,
+  input: UbahRekapInput,
+  user: PenggunaSesi,
+  audit: KonteksAudit,
+): Promise<Rekap> {
   const hasil = await prisma.$transaction(async (tx) => {
     const lama = await repo.ambil(tx, id);
     if (!lama) throw notFound('Rekap tidak ditemukan.');
     const baru = await repo.ubah(tx, id, {
-      ...input,
+      total_jam_wajib: input.total_jam_wajib,
+      total_jam_hadir: input.total_jam_hadir,
       persentase_kehadiran: persentaseKehadiran(input.total_jam_hadir, input.total_jam_wajib),
+      dikoreksi_manual: true,
+      alasan_koreksi: input.alasan_koreksi,
+      dikoreksi_oleh: user.id,
+      dikoreksi_pada: new Date(),
     });
     await catatAudit(tx, audit, {
       module: 'Rekap',
       aktivitas: 'UPDATE_REKAP',
       entity_type: 'rekap_kehadiran_guru',
       entity_id: id,
-      description: `Mengoreksi rekap ${lama.nama_guru} pekan ${lama.minggu_ke}/${lama.tahun}: jam ${lama.total_jam_hadir}/${lama.total_jam_wajib} menjadi ${baru.total_jam_hadir}/${baru.total_jam_wajib} (${baru.persentase_kehadiran}%).`,
+      description: `Mengoreksi rekap ${lama.nama_guru} pekan ${lama.minggu_ke}/${lama.tahun}: jam ${lama.total_jam_hadir}/${lama.total_jam_wajib} menjadi ${baru.total_jam_hadir}/${baru.total_jam_wajib} (${baru.persentase_kehadiran}%). Alasan: ${input.alasan_koreksi}`,
     });
     return baru;
   });

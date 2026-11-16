@@ -10,14 +10,17 @@ import { CalendarCheck, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import type { z } from 'zod';
 import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
 import { FilterBar, FilterItem, useFilterUrl } from '@/components/FilterBar';
 import { ProgressBar } from '@/components/ProgressBar';
+import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, Dialog, DialogAksi } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input, Select } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
 import { pesanGalat } from '@/lib/api';
+import { usePengguna } from '@/lib/auth';
 import { angka, labelPekan, persen } from '@/lib/format';
 import { useRefGuru, useRefKelas } from '@/lib/referensi';
 import {
@@ -26,6 +29,7 @@ import {
   useHapusRekap,
   useMapelRekap,
   usePekanRekap,
+  usePratinjauSinkron,
   useSinkronRekap,
   useUbahRekap,
 } from './api';
@@ -69,6 +73,7 @@ export function RekapPage() {
   const siap = semuaPekan || pekan !== undefined;
   const daftar = useDaftarRekap({ ...filter, page: f.page, pageSize: 20 }, siap);
 
+  const admin = usePengguna().role === 'admin';
   const sinkron = useSinkronRekap();
   const hapus = useHapusRekap();
   const [konfirmasiSinkron, setKonfirmasiSinkron] = useState(false);
@@ -85,6 +90,17 @@ export function RekapPage() {
           <span>
             {r.nama_guru}
             <span className="block text-xs font-normal text-ink-subtle">{r.kode_guru}</span>
+            {r.dikoreksi_manual && (
+              <span className="mt-1 block">
+                <StatusBadge status="Dikoreksi manual" nada="izin" />
+                {r.alasan_koreksi && (
+                  <span className="mt-0.5 block text-xs font-normal text-ink-muted">
+                    Alasan: {r.alasan_koreksi}
+                    {r.nama_pengoreksi ? ` (${r.nama_pengoreksi})` : ''}
+                  </span>
+                )}
+              </span>
+            )}
           </span>
         ),
       },
@@ -297,37 +313,34 @@ export function RekapPage() {
         />
       )}
 
-      <ConfirmDialog
-        open={konfirmasiSinkron}
-        onOpenChange={setKonfirmasiSinkron}
-        judul="Sinkronkan rekap?"
-        pesan={
-          pekan && (
-            <>
-              Rekap <strong className="font-semibold text-ink">{label(pekan)}</strong> dihitung
-              ulang untuk semua guru aktif dari jadwal dan catatan kehadiran. Koreksi manual pada
-              pekan ini akan ditimpa.
-            </>
-          )
-        }
-        labelSetuju="Sinkronkan"
-        memproses={sinkron.isPending}
-        onSetuju={() =>
-          pekan &&
-          sinkron.mutate(
-            { minggu_ke: pekan.minggu_ke, tahun: pekan.tahun },
-            {
-              onSuccess: (res) => {
-                toast.success(
-                  `Rekap ${label(res.data.pekan)} disinkronkan untuk ${angka(res.data.disinkronkan)} guru.`,
-                );
-                setKonfirmasiSinkron(false);
+      {konfirmasiSinkron && pekan && (
+        <DialogSinkron
+          pekan={pekan}
+          admin={admin}
+          memproses={sinkron.isPending}
+          onTutup={() => setKonfirmasiSinkron(false)}
+          onSetuju={(timpa) =>
+            sinkron.mutate(
+              { minggu_ke: pekan.minggu_ke, tahun: pekan.tahun, timpa_koreksi: timpa },
+              {
+                onSuccess: (res) => {
+                  const { disinkronkan, dilewati, ditimpa } = res.data;
+                  const rincian = ditimpa
+                    ? ` ${angka(ditimpa)} koreksi manual ditimpa.`
+                    : dilewati
+                      ? ` ${angka(dilewati)} koreksi manual dilewati.`
+                      : '';
+                  toast.success(
+                    `Rekap ${label(res.data.pekan)} disinkronkan untuk ${angka(disinkronkan)} guru.${rincian}`,
+                  );
+                  setKonfirmasiSinkron(false);
+                },
+                onError: (err) => toast.error(pesanGalat(err)),
               },
-              onError: (err) => toast.error(pesanGalat(err)),
-            },
-          )
-        }
-      />
+            )
+          }
+        />
+      )}
 
       <ConfirmDialog
         open={akanDihapus !== null}
@@ -361,13 +374,91 @@ export function RekapPage() {
   );
 }
 
+/**
+ * Konfirmasi sinkron: menyebut jumlah baris yang dikoreksi manual. Baris itu dilewati;
+ * hanya admin yang boleh memilih menimpanya.
+ */
+function DialogSinkron({
+  pekan,
+  admin,
+  memproses,
+  onTutup,
+  onSetuju,
+}: {
+  pekan: PekanTersedia;
+  admin: boolean;
+  memproses: boolean;
+  onTutup: () => void;
+  onSetuju: (timpa: boolean) => void;
+}) {
+  const pratinjau = usePratinjauSinkron({ minggu_ke: pekan.minggu_ke, tahun: pekan.tahun });
+  const [timpa, setTimpa] = useState(false);
+  const n = pratinjau.data?.terkoreksi ?? 0;
+  const timpaAktif = admin && timpa && n > 0;
+
+  return (
+    <Dialog open onOpenChange={(buka) => !buka && onTutup()} judul="Sinkronkan rekap?">
+      <div className="flex flex-col gap-3 text-sm text-ink-muted">
+        <p>
+          Rekap <strong className="font-semibold text-ink">{label(pekan)}</strong> dihitung ulang
+          untuk semua guru aktif dari jadwal dan catatan kehadiran.
+        </p>
+        {pratinjau.isPending ? (
+          <p className="text-ink-subtle">Memeriksa koreksi manual…</p>
+        ) : pratinjau.isError ? (
+          <p role="alert" className="text-tidak-hadir">
+            {pesanGalat(pratinjau.error)}
+          </p>
+        ) : n > 0 ? (
+          <div className="rounded-lg bg-izin-soft px-3 py-2 text-ink">
+            <p>
+              <strong className="font-semibold">{angka(n)} baris</strong> pada pekan ini sudah
+              dikoreksi manual dan <strong className="font-semibold">akan dilewati</strong>.
+            </p>
+            {admin && (
+              <label className="mt-2 flex min-h-11 items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-tidak-hadir"
+                  checked={timpa}
+                  onChange={(e) => setTimpa(e.target.checked)}
+                />
+                Timpa {angka(n)} baris koreksi manual dengan hasil sinkron
+              </label>
+            )}
+          </div>
+        ) : (
+          <p>Tidak ada baris yang dikoreksi manual pada pekan ini.</p>
+        )}
+      </div>
+      <DialogAksi>
+        <Button variant="secondary" size="touch" onClick={onTutup}>
+          Batal
+        </Button>
+        <Button
+          variant={timpaAktif ? 'danger' : 'primary'}
+          size="touch"
+          loading={memproses}
+          disabled={pratinjau.isPending}
+          onClick={() => onSetuju(timpaAktif)}
+        >
+          {timpaAktif ? `Sinkronkan dan timpa ${angka(n)} baris` : 'Sinkronkan'}
+        </Button>
+      </DialogAksi>
+    </Dialog>
+  );
+}
+
+type FormKoreksi = z.input<typeof ubahRekapSchema>;
+
 function DialogKoreksi({ rekap, onTutup }: { rekap: Rekap; onTutup: () => void }) {
   const ubah = useUbahRekap();
-  const form = useForm<UbahRekapInput>({
+  const form = useForm<FormKoreksi, unknown, UbahRekapInput>({
     resolver: zodResolver(ubahRekapSchema),
     defaultValues: {
       total_jam_wajib: rekap.total_jam_wajib,
       total_jam_hadir: rekap.total_jam_hadir,
+      alasan_koreksi: rekap.alasan_koreksi ?? '',
     },
   });
   const wajib = form.watch('total_jam_wajib');
@@ -381,7 +472,7 @@ function DialogKoreksi({ rekap, onTutup }: { rekap: Rekap; onTutup: () => void }
       open
       onOpenChange={(buka) => !buka && onTutup()}
       judul="Koreksi rekap"
-      deskripsi={`${rekap.nama_guru} · ${label(rekap)}. Sinkron berikutnya untuk pekan ini akan menimpa koreksi ini.`}
+      deskripsi={`${rekap.nama_guru} · ${label(rekap)}. Baris yang dikoreksi dilewati saat sinkron, kecuali admin memilih menimpanya.`}
     >
       <form
         noValidate
@@ -420,6 +511,14 @@ function DialogKoreksi({ rekap, onTutup }: { rekap: Rekap; onTutup: () => void }
         <p className="text-sm text-ink-muted" aria-live="polite">
           Persentase menjadi <strong className="font-semibold text-ink">{persen(pratinjau)}</strong>
         </p>
+        <Field
+          label="Alasan koreksi"
+          wajib
+          bantuan="Tercatat di log aktivitas dan tampil di daftar rekap."
+          galat={galat.alasan_koreksi?.message}
+        >
+          <Textarea rows={3} maxLength={500} {...form.register('alasan_koreksi')} />
+        </Field>
         <DialogAksi>
           <Button variant="secondary" size="touch" onClick={onTutup}>
             Batal

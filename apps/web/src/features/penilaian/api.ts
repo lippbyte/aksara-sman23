@@ -7,6 +7,9 @@ import type {
   Respons,
   SimpanPenilaianKinerjaInput,
   SimpanPenilaianMgmpInput,
+  SimpanSkorSiswaMgmpInput,
+  SkorSiswaKelasBaris,
+  SkorSiswaMgmpQuery,
 } from '@sms/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, qs } from '@/lib/api';
@@ -61,6 +64,25 @@ export function useSimpanMgmp() {
   return useMutation({
     mutationFn: (data: SimpanPenilaianMgmpInput) =>
       api.put<Respons<PenilaianMgmpBaris>>('/penilaian-mgmp', data),
+    onSuccess: segarkan,
+  });
+}
+
+/** Rincian skor siswa per kelas untuk satu MGMP (sekretaris: hanya kelasnya). */
+export function useSkorSiswaKelas(params: SkorSiswaMgmpQuery) {
+  return useQuery({
+    queryKey: ['penilaian', 'mgmp-siswa', params],
+    queryFn: async () =>
+      (await api.get<Respons<SkorSiswaKelasBaris[]>>(`/penilaian-mgmp/skor-siswa${qs(params)}`))
+        .data,
+  });
+}
+
+export function useSimpanSkorSiswa() {
+  const segarkan = useSegarkan();
+  return useMutation({
+    mutationFn: (data: SimpanSkorSiswaMgmpInput) =>
+      api.put<Respons<PenilaianMgmpBaris>>('/penilaian-mgmp/skor-siswa', data),
     onSuccess: segarkan,
   });
 }

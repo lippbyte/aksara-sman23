@@ -1,7 +1,7 @@
 import { loginSchema, ubahPasswordSchema, type Respons, type SesiSaya } from '@sms/shared';
 import type { Request } from 'express';
 import { konteksAudit } from '../../lib/audit';
-import { NAMA_COOKIE_SESI, OPSI_HAPUS_COOKIE } from '../../lib/session';
+import { mulaiSesi, NAMA_COOKIE_SESI, OPSI_HAPUS_COOKIE } from '../../lib/session';
 import { validate, validatePublik } from '../../middleware/validate';
 import * as service from './service';
 
@@ -27,7 +27,7 @@ export const login = validatePublik({ body: loginSchema }, async ({ req, body })
   const user = await service.login(body, konteksAudit(req));
   // ID sesi baru setiap login (mencegah session fixation).
   await regenerasiSesi(req);
-  req.session.userId = user.id;
+  mulaiSesi(req.session, user.id);
   await simpanSesi(req);
   const hasil: Respons<SesiSaya> = { data: { user, sekolah: await service.sekolahRingkas() } };
   return hasil;
@@ -46,7 +46,8 @@ export const me = validate({}, async ({ user }) => {
 
 export const ubahPassword = validate(
   { body: ubahPasswordSchema },
-  async ({ user, body, audit }) => {
-    await service.ubahPasswordSendiri(user, body, audit);
+  async ({ req, user, body, audit }) => {
+    // Sesi yang sedang dipakai dipertahankan; sesi lain milik pengguna ini diakhiri.
+    await service.ubahPasswordSendiri(user, body, audit, req.sessionID);
   },
 );

@@ -3,6 +3,7 @@ import {
   pekanBeririsanBulan,
   persentaseKehadiran,
   rataRata,
+  skorKehadiranGuruMgmp,
   skorKehadiranMgmp,
   persentaseJamTerisi,
   rataRataPekanGuru,
@@ -134,39 +135,69 @@ describe('rataRataBulanan', () => {
 });
 
 describe('skorKehadiranMgmp', () => {
-  const pekan = (mulai: string, selesai: string, persen: number) => ({
+  const pekan = (mulai: string, selesai: string, persen: number, wajib = 10) => ({
     tanggal_mulai: mulai,
     tanggal_selesai: selesai,
     persentase_kehadiran: persen,
+    total_jam_wajib: wajib,
+  });
+  const guru = (rekap: ReturnType<typeof pekan>[], jam_wajib_jadwal = 10) => ({
+    jam_wajib_jadwal,
+    rekap,
   });
 
   it('rata-rata skor bulanan tiap guru, termasuk pekan lintas bulan', () => {
-    const guruA = [
+    const guruA = guru([
       pekan('2026-06-22', '2026-06-26', 80),
       pekan('2026-06-29', '2026-07-03', 90), // lintas bulan: ikut Juni dan Juli
-    ];
-    const guruB = [pekan('2026-06-29', '2026-07-03', 70)];
+    ]);
+    const guruB = guru([pekan('2026-06-29', '2026-07-03', 70)]);
     // Juni: A = (80 + 90) / 2 = 85; B = 70 → (85 + 70) / 2 = 77,5
     expect(skorKehadiranMgmp([guruA, guruB], 6, 2026)).toBe(77.5);
     // Juli: A = 90; B = 70 → 80
     expect(skorKehadiranMgmp([guruA, guruB], 7, 2026)).toBe(80);
   });
 
-  it('guru tanpa rekap pada bulan itu tidak dihitung sebagai 0', () => {
-    const guruA = [pekan('2026-03-02', '2026-03-06', 100)];
-    const guruTanpaRekap: ReturnType<typeof pekan>[] = [];
-    const guruBulanLain = [pekan('2026-04-06', '2026-04-10', 0)];
-    expect(skorKehadiranMgmp([guruA, guruTanpaRekap, guruBulanLain], 3, 2026)).toBe(100);
+  it('guru berjadwal tanpa catatan/rekap pada bulan itu dihitung 0', () => {
+    const guruA = guru([pekan('2026-03-02', '2026-03-06', 100)]);
+    const tanpaRekap = guru([]);
+    const rekapBulanLain = guru([pekan('2026-04-06', '2026-04-10', 100)]);
+    // (100 + 0 + 0) / 3
+    expect(skorKehadiranMgmp([guruA, tanpaRekap, rekapBulanLain], 3, 2026)).toBe(33.33);
   });
 
-  it('MGMP tanpa guru atau tanpa rekap → 0', () => {
+  it('hanya guru tanpa jam wajib yang dikeluarkan', () => {
+    const guruA = guru([pekan('2026-03-02', '2026-03-06', 80)]);
+    const tanpaJadwal = guru([], 0);
+    const rekapWajibNol = guru([pekan('2026-03-02', '2026-03-06', 0, 0)], 0);
+    expect(skorKehadiranMgmp([guruA, tanpaJadwal, rekapWajibNol], 3, 2026)).toBe(80);
+  });
+
+  it('rekap pekan berjam wajib 0 diutamakan dari jadwal sekarang (guru dikeluarkan)', () => {
+    // Jadwal baru ditambah setelah bulan itu; rekap bulan itu mencatat jam wajib 0.
+    const jadwalBaru = guru([pekan('2026-03-02', '2026-03-06', 0, 0)], 12);
+    const guruA = guru([pekan('2026-03-02', '2026-03-06', 90)]);
+    expect(skorKehadiranMgmp([guruA, jadwalBaru], 3, 2026)).toBe(90);
+  });
+
+  it('pekan berjam wajib 0 dilewati bila guru punya pekan berjadwal lain', () => {
+    const g = guru([
+      pekan('2026-03-02', '2026-03-06', 100),
+      pekan('2026-03-09', '2026-03-13', 0, 0),
+    ]);
+    expect(skorKehadiranGuruMgmp(g, 3, 2026)).toBe(100);
+    expect(skorKehadiranGuruMgmp(guru([], 0), 3, 2026)).toBeNull();
+    expect(skorKehadiranGuruMgmp(guru([], 4), 3, 2026)).toBe(0);
+  });
+
+  it('MGMP tanpa guru, atau semua guru tanpa jam wajib → 0', () => {
     expect(skorKehadiranMgmp([], 3, 2026)).toBe(0);
-    expect(skorKehadiranMgmp([[], []], 3, 2026)).toBe(0);
+    expect(skorKehadiranMgmp([guru([], 0), guru([], 0)], 3, 2026)).toBe(0);
   });
 
   it('pembulatan hanya di hasil akhir', () => {
-    const a = [pekan('2026-03-02', '2026-03-06', 100), pekan('2026-03-09', '2026-03-13', 95)];
-    const b = [pekan('2026-03-02', '2026-03-06', 66.67)];
+    const a = guru([pekan('2026-03-02', '2026-03-06', 100), pekan('2026-03-09', '2026-03-13', 95)]);
+    const b = guru([pekan('2026-03-02', '2026-03-06', 66.67)]);
     // A = 97,5; B = 66,67 → 82,085 → 82,09
     expect(skorKehadiranMgmp([a, b], 3, 2026)).toBe(82.09);
   });

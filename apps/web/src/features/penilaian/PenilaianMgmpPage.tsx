@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { skorSchema, teksOpsional, type PenilaianMgmpBaris, type Periode } from '@sms/shared';
-import { ClipboardPen, Download, RefreshCw, UsersRound } from 'lucide-react';
+import { ClipboardPen, Download, RefreshCw, School, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -9,11 +9,18 @@ import { DataTable, type Kolom } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, Dialog, DialogAksi } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input, Textarea } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
 import { pesanGalat } from '@/lib/api';
 import { usePengguna } from '@/lib/auth';
 import { angka, namaBulan } from '@/lib/format';
-import { urlEkspor, useDaftarMgmp, useSimpanMgmp, useSinkronPenilaian } from './api';
+import {
+  urlEkspor,
+  useDaftarMgmp,
+  useSimpanMgmp,
+  useSimpanSkorSiswa,
+  useSinkronPenilaian,
+  useSkorSiswaKelas,
+} from './api';
 import {
   InfoJendela,
   keSkor,
@@ -23,10 +30,19 @@ import {
   usePeriodeUrl,
 } from './komponen';
 
+/** "n dari m kelas" untuk skor siswa MGMP. */
+function KelasMengisi({ b }: { b: PenilaianMgmpBaris }) {
+  return (
+    <span className="text-xs text-ink-muted tabular-nums">
+      {angka(b.kelas_terisi)} dari {angka(b.jumlah_kelas)} kelas
+    </span>
+  );
+}
+
 export function PenilaianMgmpPage() {
   const user = usePengguna();
   const admin = user.role === 'admin';
-  // Sekretaris kelas hanya mengisi skor siswa (PROJECT-CONTEXT §4).
+  // Sekretaris kelas hanya mengisi skor siswa kelasnya (PROJECT-CONTEXT §4).
   const sekretaris = user.role === 'sekretaris_kelas';
   const { periode, atur } = usePeriodeUrl();
 
@@ -34,42 +50,48 @@ export function PenilaianMgmpPage() {
   const sinkron = useSinkronPenilaian('mgmp');
   const [konfirmasi, setKonfirmasi] = useState(false);
   const [dinilai, setDinilai] = useState<PenilaianMgmpBaris | null>(null);
+  const [skorKelas, setSkorKelas] = useState<PenilaianMgmpBaris | null>(null);
 
   const jendela = daftar.data?.jendela;
   const bolehIsi = admin || jendela?.terbuka === true;
   const label = `${namaBulan(periode.bulan)} ${periode.tahun}`;
 
   const kolom = useMemo<Kolom<PenilaianMgmpBaris>[]>(() => {
-    const aksi: Kolom<PenilaianMgmpBaris> = {
-      id: 'aksi',
-      judul: 'Aksi',
-      aksi: true,
-      sel: (b) => (
-        <Button
-          variant="ghost"
-          size="touch"
-          disabled={!bolehIsi}
-          aria-label={`Nilai MGMP ${b.nama_mapel}`}
-          onClick={() => setDinilai(b)}
-        >
-          <ClipboardPen aria-hidden="true" />
-          {sekretaris ? 'Isi skor siswa' : 'Nilai'}
-        </Button>
-      ),
-    };
     const mgmp: Kolom<PenilaianMgmpBaris> = {
       id: 'mgmp',
       judul: 'MGMP',
       utama: true,
       sel: (b) => b.nama_mapel,
     };
-    const siswa: Kolom<PenilaianMgmpBaris> = {
-      id: 'siswa',
-      judul: 'Skor siswa',
-      angka: true,
-      sel: (b) => <TeksSkor nilai={b.skor_siswa} />,
-    };
-    if (sekretaris) return [mgmp, siswa, aksi];
+    if (sekretaris) {
+      return [
+        mgmp,
+        {
+          id: 'skor-kelas',
+          judul: `Skor siswa ${user.nama_kelas ?? 'kelas Anda'}`,
+          angka: true,
+          sel: (b) => <TeksSkor nilai={b.skor_kelas_saya} />,
+        },
+        { id: 'terisi', judul: 'Sudah mengisi', sel: (b) => <KelasMengisi b={b} /> },
+        {
+          id: 'aksi',
+          judul: 'Aksi',
+          aksi: true,
+          sel: (b) => (
+            <Button
+              variant="ghost"
+              size="touch"
+              disabled={!bolehIsi}
+              aria-label={`Isi skor siswa MGMP ${b.nama_mapel}`}
+              onClick={() => setSkorKelas(b)}
+            >
+              <ClipboardPen aria-hidden="true" />
+              Isi skor siswa
+            </Button>
+          ),
+        },
+      ];
+    }
     return [
       mgmp,
       { id: 'guru', judul: 'Guru aktif', angka: true, sel: (b) => angka(b.jumlah_guru_aktif) },
@@ -79,7 +101,17 @@ export function PenilaianMgmpPage() {
         angka: true,
         sel: (b) => <TeksSkor nilai={b.skor_kehadiran} />,
       },
-      siswa,
+      {
+        id: 'siswa',
+        judul: 'Skor siswa',
+        angka: true,
+        sel: (b) => (
+          <span className="flex flex-col items-end">
+            <TeksSkor nilai={b.skor_siswa} />
+            <KelasMengisi b={b} />
+          </span>
+        ),
+      },
       {
         id: 'adm',
         judul: 'Administrasi',
@@ -97,24 +129,57 @@ export function PenilaianMgmpPage() {
         ),
       },
       { id: 'predikat', judul: 'Predikat', sel: (b) => <LencanaPredikat predikat={b.predikat} /> },
-      aksi,
+      {
+        id: 'aksi',
+        judul: 'Aksi',
+        aksi: true,
+        sel: (b) => (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="touch"
+              aria-label={`Skor siswa per kelas MGMP ${b.nama_mapel}`}
+              onClick={() => setSkorKelas(b)}
+            >
+              <School aria-hidden="true" />
+              Per kelas
+            </Button>
+            <Button
+              variant="ghost"
+              size="touch"
+              disabled={!bolehIsi}
+              aria-label={`Nilai MGMP ${b.nama_mapel}`}
+              onClick={() => setDinilai(b)}
+            >
+              <ClipboardPen aria-hidden="true" />
+              Nilai
+            </Button>
+          </div>
+        ),
+      },
     ];
-  }, [bolehIsi, sekretaris]);
+  }, [bolehIsi, sekretaris, user.nama_kelas]);
 
   return (
     <div>
       <PilihPeriode periode={periode} onUbah={atur} />
       <InfoJendela jendela={jendela} periode={periode} admin={admin} />
 
-      {!sekretaris && (
+      {sekretaris ? (
+        <p className="mb-3 text-xs text-ink-subtle">
+          Isi skor siswa untuk kelas {user.nama_kelas ?? 'Anda'}. Skor siswa MGMP adalah rata-rata
+          kelas yang sudah mengisi.
+        </p>
+      ) : (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs text-ink-subtle">
-            Skor kehadiran MGMP diisi otomatis dari rekap pekan guru aktif anggotanya.
+            Skor kehadiran diisi otomatis dari rekap pekan guru anggota MGMP; skor siswa adalah
+            rata-rata skor yang diisi tiap kelas.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
               <RefreshCw aria-hidden="true" />
-              Sinkronkan skor kehadiran
+              Sinkronkan skor otomatis
             </Button>
             <Button asChild size="touch" variant="secondary">
               <a href={urlEkspor('mgmp', periode)} download>
@@ -141,12 +206,12 @@ export function PenilaianMgmpPage() {
       <ConfirmDialog
         open={konfirmasi}
         onOpenChange={setKonfirmasi}
-        judul="Sinkronkan skor kehadiran MGMP?"
+        judul="Sinkronkan skor otomatis MGMP?"
         pesan={
           <>
-            Skor kehadiran semua MGMP untuk{' '}
-            <strong className="font-semibold text-ink">{label}</strong> dihitung ulang dari rekap
-            pekan. Skor siswa dan administrasi tidak berubah.
+            Skor kehadiran dan rata-rata skor siswa semua MGMP untuk{' '}
+            <strong className="font-semibold text-ink">{label}</strong> dihitung ulang. Skor
+            administrasi dan catatan tidak berubah.
           </>
         }
         labelSetuju="Sinkronkan"
@@ -154,7 +219,7 @@ export function PenilaianMgmpPage() {
         onSetuju={() =>
           sinkron.mutate(periode, {
             onSuccess: (res) => {
-              toast.success(`Skor kehadiran ${angka(res.data.disinkronkan)} MGMP disinkronkan.`);
+              toast.success(`Skor otomatis ${angka(res.data.disinkronkan)} MGMP disinkronkan.`);
               setKonfirmasi(false);
             },
             onError: (err) => toast.error(pesanGalat(err)),
@@ -163,11 +228,15 @@ export function PenilaianMgmpPage() {
       />
 
       {dinilai && (
-        <FormNilaiMgmp
-          baris={dinilai}
+        <FormNilaiMgmp baris={dinilai} periode={periode} onTutup={() => setDinilai(null)} />
+      )}
+      {skorKelas && (
+        <DialogSkorSiswa
+          baris={skorKelas}
           periode={periode}
           sekretaris={sekretaris}
-          onTutup={() => setDinilai(null)}
+          bolehIsi={bolehIsi}
+          onTutup={() => setSkorKelas(null)}
         />
       )}
     </div>
@@ -176,7 +245,6 @@ export function PenilaianMgmpPage() {
 
 // Form klien: skor boleh kosong (tidak dikirim). Skema per isian sama dengan server.
 const formMgmpSchema = z.object({
-  skor_siswa: skorSchema.nullable(),
   skor_administrasi: skorSchema.nullable(),
   catatan: teksOpsional(1000),
 });
@@ -186,21 +254,16 @@ type FormMgmpKeluar = z.output<typeof formMgmpSchema>;
 function FormNilaiMgmp({
   baris,
   periode,
-  sekretaris,
   onTutup,
 }: {
   baris: PenilaianMgmpBaris;
   periode: Periode;
-  sekretaris: boolean;
   onTutup: () => void;
 }) {
   const simpan = useSimpanMgmp();
   const form = useForm<FormMgmp, unknown, FormMgmpKeluar>({
-    resolver: zodResolver(
-      sekretaris ? formMgmpSchema.extend({ skor_siswa: skorSchema }) : formMgmpSchema,
-    ),
+    resolver: zodResolver(formMgmpSchema),
     defaultValues: {
-      skor_siswa: baris.skor_siswa,
       skor_administrasi: baris.skor_administrasi,
       catatan: baris.catatan ?? '',
     },
@@ -208,16 +271,15 @@ function FormNilaiMgmp({
   const galat = form.formState.errors;
 
   function kirim(data: FormMgmpKeluar) {
-    // Sekretaris hanya mengirim skor_siswa; isian kosong tidak dikirim (tidak diubah).
-    const isi = sekretaris
-      ? { skor_siswa: data.skor_siswa ?? undefined }
-      : {
-          skor_siswa: data.skor_siswa ?? undefined,
-          skor_administrasi: data.skor_administrasi ?? undefined,
-          catatan: data.catatan,
-        };
     simpan.mutate(
-      { mgmp_id: baris.mgmp_id, bulan: periode.bulan, tahun: periode.tahun, ...isi },
+      {
+        mgmp_id: baris.mgmp_id,
+        bulan: periode.bulan,
+        tahun: periode.tahun,
+        // Isian kosong tidak dikirim (tidak diubah).
+        skor_administrasi: data.skor_administrasi ?? undefined,
+        catatan: data.catatan,
+      },
       {
         onSuccess: () => {
           toast.success(`Penilaian MGMP ${baris.nama_mapel} tersimpan.`);
@@ -236,46 +298,36 @@ function FormNilaiMgmp({
       deskripsi={`${namaBulan(periode.bulan)} ${periode.tahun} · Skor 0–100, paling banyak dua desimal.`}
     >
       <form noValidate className="flex flex-col gap-4" onSubmit={form.handleSubmit(kirim)}>
-        {!sekretaris && (
-          <div className="rounded-lg bg-subtle px-3 py-2 text-sm">
-            <span className="text-ink-muted">Skor kehadiran (otomatis): </span>
-            <strong className="font-semibold text-ink">
+        <dl className="grid grid-cols-2 gap-2 rounded-lg bg-subtle px-3 py-2 text-sm">
+          <div>
+            <dt className="text-ink-muted">Skor kehadiran (otomatis)</dt>
+            <dd className="font-semibold text-ink">
               <TeksSkor nilai={baris.skor_kehadiran} />
-            </strong>
+            </dd>
           </div>
-        )}
-        <Field
-          label="Skor siswa"
-          wajib={sekretaris}
-          bantuan={sekretaris ? 'Penilaian siswa terhadap kegiatan MGMP ini.' : undefined}
-          galat={galat.skor_siswa?.message}
-        >
+          <div>
+            <dt className="text-ink-muted">Skor siswa (rata-rata kelas)</dt>
+            <dd className="font-semibold text-ink">
+              <TeksSkor nilai={baris.skor_siswa} />{' '}
+              <span className="font-normal">
+                <KelasMengisi b={baris} />
+              </span>
+            </dd>
+          </div>
+        </dl>
+        <Field label="Skor administrasi" galat={galat.skor_administrasi?.message}>
           <Input
             type="number"
             inputMode="decimal"
             step="0.01"
             min={0}
             max={100}
-            {...form.register('skor_siswa', { setValueAs: keSkor })}
+            {...form.register('skor_administrasi', { setValueAs: keSkor })}
           />
         </Field>
-        {!sekretaris && (
-          <>
-            <Field label="Skor administrasi" galat={galat.skor_administrasi?.message}>
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.01"
-                min={0}
-                max={100}
-                {...form.register('skor_administrasi', { setValueAs: keSkor })}
-              />
-            </Field>
-            <Field label="Catatan" galat={galat.catatan?.message}>
-              <Textarea rows={3} maxLength={1000} {...form.register('catatan')} />
-            </Field>
-          </>
-        )}
+        <Field label="Catatan" galat={galat.catatan?.message}>
+          <Textarea rows={3} maxLength={1000} {...form.register('catatan')} />
+        </Field>
         <DialogAksi>
           <Button variant="secondary" size="touch" onClick={onTutup}>
             Batal
@@ -285,6 +337,182 @@ function FormNilaiMgmp({
           </Button>
         </DialogAksi>
       </form>
+    </Dialog>
+  );
+}
+
+// Sekretaris: kelas dari akun (tidak dipilih). Peran lain: wajib memilih kelas.
+const buatSkemaSkorSiswa = (wajibKelas: boolean) =>
+  z
+    .object({ kelas_id: z.number().int().positive().nullable(), skor: skorSchema.nullable() })
+    .refine((v) => !wajibKelas || v.kelas_id !== null, {
+      message: 'Kelas wajib dipilih.',
+      path: ['kelas_id'],
+    })
+    .refine((v) => v.skor !== null, { message: 'Skor wajib diisi.', path: ['skor'] });
+type FormSkorSiswa = { kelas_id: number | null; skor: number | null };
+type FormSkorSiswaKeluar = z.output<ReturnType<typeof buatSkemaSkorSiswa>>;
+
+function DialogSkorSiswa({
+  baris,
+  periode,
+  sekretaris,
+  bolehIsi,
+  onTutup,
+}: {
+  baris: PenilaianMgmpBaris;
+  periode: Periode;
+  sekretaris: boolean;
+  bolehIsi: boolean;
+  onTutup: () => void;
+}) {
+  const rincian = useSkorSiswaKelas({ mgmp_id: baris.mgmp_id, ...periode });
+  const simpan = useSimpanSkorSiswa();
+  const form = useForm<FormSkorSiswa, unknown, FormSkorSiswaKeluar>({
+    resolver: zodResolver(buatSkemaSkorSiswa(!sekretaris)),
+    defaultValues: { kelas_id: null, skor: sekretaris ? baris.skor_kelas_saya : null },
+  });
+  const galat = form.formState.errors;
+  const kelas = rincian.data ?? [];
+
+  function pilihKelas(nilai: string) {
+    const id = nilai ? Number(nilai) : null;
+    form.setValue('kelas_id', id, { shouldValidate: form.formState.isSubmitted });
+    const ada = kelas.find((k) => k.kelas_id === id);
+    form.setValue('skor', ada?.skor ?? null);
+  }
+
+  function kirim(data: FormSkorSiswaKeluar) {
+    if (data.skor === null) return;
+    simpan.mutate(
+      {
+        mgmp_id: baris.mgmp_id,
+        bulan: periode.bulan,
+        tahun: periode.tahun,
+        skor: data.skor,
+        ...(sekretaris || data.kelas_id === null ? {} : { kelas_id: data.kelas_id }),
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Skor siswa MGMP ${baris.nama_mapel} tersimpan.`);
+          if (sekretaris) onTutup();
+          else form.reset({ kelas_id: null, skor: null });
+        },
+        onError: (err) => toast.error(pesanGalat(err)),
+      },
+    );
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(buka) => !buka && onTutup()}
+      judul={`Skor siswa MGMP ${baris.nama_mapel}`}
+      deskripsi={`${namaBulan(periode.bulan)} ${periode.tahun} · Skor 0–100, paling banyak dua desimal.`}
+    >
+      {!sekretaris && (
+        <div className="mb-4">
+          <p className="mb-2 text-sm text-ink-muted">
+            Rata-rata: <TeksSkor nilai={baris.skor_siswa} /> · <KelasMengisi b={baris} />
+          </p>
+          {rincian.isError ? (
+            <p role="alert" className="text-sm text-tidak-hadir">
+              {pesanGalat(rincian.error)}
+            </p>
+          ) : (
+            <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
+              <table className="w-full text-sm">
+                <caption className="sr-only">Skor siswa per kelas</caption>
+                <thead className="bg-subtle text-left text-xs text-ink-muted">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Kelas
+                    </th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">
+                      Skor
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Diisi oleh
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rincian.isPending ? (
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2 text-ink-subtle">
+                        Memuat…
+                      </td>
+                    </tr>
+                  ) : (
+                    kelas.map((k) => (
+                      <tr key={k.kelas_id} className="border-t border-line">
+                        <td className="px-3 py-2">{k.nama_kelas}</td>
+                        <td className="px-3 py-2 text-right">
+                          <TeksSkor nilai={k.skor} />
+                        </td>
+                        <td className="px-3 py-2 text-ink-muted">
+                          {k.nama_pengisi ?? 'Belum mengisi'}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {bolehIsi ? (
+        <form noValidate className="flex flex-col gap-4" onSubmit={form.handleSubmit(kirim)}>
+          {!sekretaris && (
+            <Field label="Kelas" wajib galat={galat.kelas_id?.message}>
+              <Select
+                value={form.watch('kelas_id') ?? ''}
+                onChange={(e) => pilihKelas(e.target.value)}
+              >
+                <option value="">Pilih kelas</option>
+                {kelas.map((k) => (
+                  <option key={k.kelas_id} value={k.kelas_id}>
+                    {k.nama_kelas}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
+          <Field
+            label={sekretaris ? 'Skor siswa kelas Anda' : 'Skor siswa kelas ini'}
+            wajib
+            bantuan={
+              sekretaris ? 'Penilaian siswa kelas Anda terhadap kegiatan MGMP ini.' : undefined
+            }
+            galat={galat.skor?.message}
+          >
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min={0}
+              max={100}
+              {...form.register('skor', { setValueAs: keSkor })}
+            />
+          </Field>
+          <DialogAksi>
+            <Button variant="secondary" size="touch" onClick={onTutup}>
+              {sekretaris ? 'Batal' : 'Tutup'}
+            </Button>
+            <Button type="submit" size="touch" loading={simpan.isPending}>
+              Simpan
+            </Button>
+          </DialogAksi>
+        </form>
+      ) : (
+        <DialogAksi>
+          <Button variant="secondary" size="touch" onClick={onTutup}>
+            Tutup
+          </Button>
+        </DialogAksi>
+      )}
     </Dialog>
   );
 }

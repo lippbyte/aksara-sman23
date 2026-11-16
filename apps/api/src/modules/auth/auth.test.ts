@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp, tutupSumberDaya } from '../../app';
 import { prisma } from '../../lib/prisma';
 import { emailPeran, Klien, masukSebagai, ORIGIN } from '../../test/bantuan';
@@ -233,5 +233,89 @@ describe('PUT /auth/password', () => {
       password_baru: 'kata-sandi-baru-456',
     });
     expect(res.status).toBe(401);
+  });
+
+  it('ganti kata sandi mengakhiri sesi lain pengguna itu; sesi yang dipakai tetap', async () => {
+    const emailLain = 'ganti.sandi.sesi@contoh.test';
+    await prisma.user.upsert({
+      where: { email: emailLain },
+      update: { password: await hashPassword(PASSWORD_UJI), is_active: true },
+      create: {
+        name: 'Akun Sesi Contoh',
+        email: emailLain,
+        password: await hashPassword(PASSWORD_UJI),
+        role: 'guru_penilai',
+      },
+    });
+    const dipakai = new Klien(app);
+    const perangkatLain = new Klien(app);
+    const orangLain = await masukSebagai(app, 'manajemen_guru');
+    await dipakai.masuk(emailLain);
+    await perangkatLain.masuk(emailLain);
+    expect((await perangkatLain.get('/api/v1/auth/me')).status).toBe(200);
+
+    const res = await dipakai.put('/api/v1/auth/password', {
+      password_lama: PASSWORD_UJI,
+      password_baru: 'kata-sandi-baru-789',
+    });
+    expect(res.status).toBe(204);
+
+    expect((await dipakai.get('/api/v1/auth/me')).status).toBe(200);
+    expect((await perangkatLain.get('/api/v1/auth/me')).status).toBe(401);
+    // Sesi pengguna lain tidak tersentuh.
+    expect((await orangLain.get('/api/v1/auth/me')).status).toBe(200);
+
+    const log = await prisma.auditLog.findFirst({
+      where: { aktivitas: 'UBAH_PASSWORD', description: { contains: '1 sesi lain diakhiri' } },
+    });
+    expect(log).not.toBeNull();
+  });
+});
+
+describe('batas sesi', () => {
+  const JAM = 60 * 60 * 1000;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('diam 2 jam → 401 dengan pesan sesi berakhir', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const klien = await masukSebagai(app, 'guru_penilai');
+    vi.setSystemTime(Date.now() + 2 * JAM - 60_000);
+    expect((await klien.get('/api/v1/auth/me')).status).toBe(200);
+
+    // Aktivitas di atas memperpanjang batas diam; 2 jam setelahnya baru berakhir.
+    vi.setSystemTime(Date.now() + 2 * JAM - 60_000);
+    expect((await klien.get('/api/v1/auth/me')).status).toBe(200);
+    vi.setSystemTime(Date.now() + 2 * JAM + 1_000);
+    const res = await klien.get('/api/v1/auth/me');
+    expect(res.status).toBe(401);
+    expect(res.body.error.message).toBe('Sesi berakhir. Silakan masuk kembali.');
+    // Tetap berakhir walau dicoba lagi.
+    expect((await klien.get('/api/v1/auth/me')).status).toBe(401);
+  });
+
+  it('aktif terus tetap berakhir 8 jam sejak masuk', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const mulai = Date.now();
+    const klien = await masukSebagai(app, 'guru_penilai');
+    for (let jam = 1.5; jam < 8; jam += 1.5) {
+      vi.setSystemTime(mulai + jam * JAM);
+      expect((await klien.get('/api/v1/auth/me')).status).toBe(200);
+    }
+    vi.setSystemTime(mulai + 8 * JAM + 1_000);
+    expect((await klien.get('/api/v1/auth/me')).status).toBe(401);
+  });
+
+  it('cookie sesi tidak diperpanjang oleh aktivitas (umur tetap 8 jam)', async () => {
+    const klien = new Klien(app);
+    const res = await klien.masuk(emailPeran('guru_penilai'));
+    const cookie = String(res.headers['set-cookie']);
+    const kedaluwarsa = /Expires=([^;]+)/.exec(cookie)?.[1];
+    expect(kedaluwarsa).toBeDefined();
+    const selisih = new Date(kedaluwarsa ?? '').getTime() - Date.now();
+    expect(selisih).toBeGreaterThan(8 * JAM - 60_000);
+    expect(selisih).toBeLessThanOrEqual(8 * JAM);
   });
 });

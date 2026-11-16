@@ -68,24 +68,48 @@ export interface PenilaianKinerjaBaris {
 // ───────────── MGMP bulanan (§6.5) ─────────────
 
 /**
- * Semua skor opsional: isian yang tidak dikirim tidak diubah.
- * `sekretaris_kelas` hanya boleh mengirim `skor_siswa` (diperiksa di server).
+ * Isian penilai MGMP (admin, manajemen_guru, guru_penilai). Isian yang tidak dikirim
+ * tidak diubah. `skor_siswa` tidak diisi di sini: nilainya rata-rata skor per kelas
+ * (`simpanSkorSiswaMgmpSchema`).
  */
 export const simpanPenilaianMgmpSchema = z
   .object({
     mgmp_id: idWajib('MGMP'),
     bulan: bulanSchema,
     tahun: tahunSchema,
-    skor_siswa: skorSchema.optional(),
     skor_administrasi: skorSchema.optional(),
     catatan: teksOpsional(1000).optional(),
   })
-  .refine(
-    (v) =>
-      v.skor_siswa !== undefined || v.skor_administrasi !== undefined || v.catatan !== undefined,
-    { message: 'Isi minimal satu nilai.', path: ['skor_siswa'] },
-  );
+  .refine((v) => v.skor_administrasi !== undefined || v.catatan !== undefined, {
+    message: 'Isi minimal satu nilai.',
+    path: ['skor_administrasi'],
+  });
 export type SimpanPenilaianMgmpInput = z.infer<typeof simpanPenilaianMgmpSchema>;
+
+/**
+ * Skor siswa MGMP untuk satu kelas (§6.5). Untuk `sekretaris_kelas`, kelas selalu
+ * diambil dari akunnya (isian `kelas_id` diabaikan); peran lain wajib memilih kelas.
+ */
+export const simpanSkorSiswaMgmpSchema = z.object({
+  mgmp_id: idWajib('MGMP'),
+  bulan: bulanSchema,
+  tahun: tahunSchema,
+  kelas_id: idWajib('Kelas').optional(),
+  skor: skorSchema,
+});
+export type SimpanSkorSiswaMgmpInput = z.infer<typeof simpanSkorSiswaMgmpSchema>;
+
+export const skorSiswaMgmpQuerySchema = periodeSchema.extend({ mgmp_id: idWajib('MGMP') });
+export type SkorSiswaMgmpQuery = z.infer<typeof skorSiswaMgmpQuerySchema>;
+
+/** Rincian skor siswa MGMP per kelas (satu baris per kelas; skor kosong bila belum mengisi). */
+export interface SkorSiswaKelasBaris {
+  kelas_id: number;
+  nama_kelas: string;
+  skor: number | null;
+  nama_pengisi: string | null;
+  updated_at: string | null;
+}
 
 export interface PenilaianMgmpBaris {
   mgmp_id: number;
@@ -93,7 +117,14 @@ export interface PenilaianMgmpBaris {
   jumlah_guru_aktif: number;
   id: number | null;
   skor_kehadiran: number | null;
+  /** Rata-rata skor kelas yang sudah mengisi; kosong bila belum ada (dan untuk sekretaris). */
   skor_siswa: number | null;
+  /** Jumlah kelas yang sudah mengisi skor siswa periode ini ("n dari m kelas"). */
+  kelas_terisi: number;
+  /** Jumlah seluruh kelas. */
+  jumlah_kelas: number;
+  /** Hanya untuk sekretaris_kelas: skor yang diisi kelasnya; kosong untuk peran lain. */
+  skor_kelas_saya: number | null;
   skor_administrasi: number | null;
   skor_akhir: number | null;
   predikat: PredikatMgmp | null;

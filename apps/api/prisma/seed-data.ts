@@ -92,6 +92,7 @@ export async function kosongkanData(prisma: PrismaClient): Promise<void> {
   // Urutan mengikuti arah kunci asing.
   await prisma.auditLog.deleteMany();
   await prisma.session.deleteMany();
+  await prisma.penilaianMgmpSiswa.deleteMany();
   await prisma.penilaianMgmp.deleteMany();
   await prisma.penilaianKinerjaBulanan.deleteMany();
   await prisma.rekapKehadiranGuru.deleteMany();

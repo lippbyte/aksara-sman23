@@ -3,6 +3,8 @@ import { Prisma } from '../../generated/prisma/client';
 import { keAngka, keDate, keNumber, keTanggalISO } from '../../lib/konversi';
 import { prisma, type Db } from '../../lib/prisma';
 
+export type RekapPekanGuru = RekapPekanRingkas & { total_jam_wajib: number };
+
 /**
  * Rekap pekan yang beririsan dengan bulan, dikelompokkan per guru (satu query).
  * Pemilihan pekan yang beririsan tetap dilakukan fungsi domain; query hanya mempersempit.
@@ -11,7 +13,7 @@ export async function rekapPerGuru(
   db: Db,
   guruIds: readonly number[],
   p: Periode,
-): Promise<Map<number, RekapPekanRingkas[]>> {
+): Promise<Map<number, RekapPekanGuru[]>> {
   const { awal, akhir } = rentangBulan(p.bulan, p.tahun);
   const rows = await db.rekapKehadiranGuru.findMany({
     where: {
@@ -24,9 +26,10 @@ export async function rekapPerGuru(
       tanggal_mulai: true,
       tanggal_selesai: true,
       persentase_kehadiran: true,
+      total_jam_wajib: true,
     },
   });
-  const peta = new Map<number, RekapPekanRingkas[]>();
+  const peta = new Map<number, RekapPekanGuru[]>();
   for (const r of rows) {
     const id = keNumber(r.guru_id);
     const daftar = peta.get(id) ?? [];
@@ -34,6 +37,7 @@ export async function rekapPerGuru(
       tanggal_mulai: keTanggalISO(r.tanggal_mulai),
       tanggal_selesai: keTanggalISO(r.tanggal_selesai),
       persentase_kehadiran: keAngka(r.persentase_kehadiran),
+      total_jam_wajib: r.total_jam_wajib,
     });
     peta.set(id, daftar);
   }

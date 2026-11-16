@@ -68,6 +68,7 @@ const RUTE: { metode: Metode; path: string; boleh: readonly Role[] }[] = [
   { metode: 'get', path: '/rekap-kehadiran/mapel', boleh: PIMPINAN },
   { metode: 'get', path: '/rekap-kehadiran/export?minggu_ke=1', boleh: PIMPINAN },
   { metode: 'post', path: '/rekap-kehadiran/sync', boleh: PIMPINAN },
+  { metode: 'get', path: '/rekap-kehadiran/sync/pratinjau', boleh: PIMPINAN },
   { metode: 'put', path: '/rekap-kehadiran/x', boleh: PIMPINAN },
   { metode: 'delete', path: '/rekap-kehadiran/x', boleh: PIMPINAN },
   // Penilaian kinerja bulanan
@@ -83,9 +84,15 @@ const RUTE: { metode: Metode; path: string; boleh: readonly Role[] }[] = [
     path: '/penilaian-kinerja/export',
     boleh: ['admin', 'manajemen_guru', 'guru_penilai'],
   },
-  // Penilaian MGMP: semua peran (sekretaris hanya skor_siswa, diuji di modulnya)
+  // Penilaian MGMP: semua peran melihat; sekretaris hanya skor siswa kelasnya (diuji di modulnya)
   { metode: 'get', path: '/penilaian-mgmp', boleh: SEMUA },
-  { metode: 'put', path: '/penilaian-mgmp', boleh: SEMUA },
+  {
+    metode: 'put',
+    path: '/penilaian-mgmp',
+    boleh: ['admin', 'manajemen_guru', 'guru_penilai'],
+  },
+  { metode: 'get', path: '/penilaian-mgmp/skor-siswa', boleh: SEMUA },
+  { metode: 'put', path: '/penilaian-mgmp/skor-siswa', boleh: SEMUA },
   {
     metode: 'post',
     path: '/penilaian-mgmp/sync',

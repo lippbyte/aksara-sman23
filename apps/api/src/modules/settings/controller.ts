@@ -80,7 +80,8 @@ export const users = {
   ),
   resetPassword: validate(
     { body: resetPasswordSchema, params: idParamSchema },
-    ({ params, body, audit }) => service.users.resetPassword(params.id, body.password_baru, audit),
+    ({ req, params, body, audit }) =>
+      service.users.resetPassword(params.id, body.password_baru, audit, req.sessionID),
   ),
 };
 
