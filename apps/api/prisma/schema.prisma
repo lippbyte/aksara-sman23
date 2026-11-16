@@ -1,0 +1,350 @@
+// Model data sesuai PROJECT-CONTEXT §5.
+// Nama tabel dan kolom: bahasa Indonesia, snake_case. MySQL 8, InnoDB, utf8mb4.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  admin
+  manajemen_guru
+  sekretaris_kelas
+  guru_penilai
+}
+
+enum StatusAktif {
+  aktif
+  tidak_aktif
+}
+
+enum JenisKelamin {
+  L
+  P
+}
+
+enum StatusKehadiran {
+  Hadir
+  Mendampingi
+  Tidak_Hadir @map("Tidak Hadir")
+}
+
+enum StatusTugas {
+  Ada
+  Tidak_Ada @map("Tidak Ada")
+}
+
+enum StatusSiswa {
+  hadir
+  izin
+  sakit
+  alpa
+}
+
+// ───────────────────────── Inti ─────────────────────────
+
+model User {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name       String   @db.VarChar(150)
+  email      String   @unique @db.VarChar(190)
+  password   String   @db.VarChar(255)
+  role       Role
+  /// Wajib bila role = sekretaris_kelas.
+  kelas_id   BigInt?  @db.UnsignedBigInt
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  kelas             Kelas?                    @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+  kehadiran         Kehadiran[]
+  kehadiran_siswa   KehadiranSiswa[]
+  penilaian_kinerja PenilaianKinerjaBulanan[]
+  penilaian_mgmp    PenilaianMgmp[]
+  audit_logs        AuditLog[]
+
+  @@index([kelas_id])
+  @@map("users")
+}
+
+/// Satu baris: pengaturan sekolah untuk instalasi ini.
+model SekolahSettings {
+  id                 BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nama_sekolah       String   @db.VarChar(150)
+  logo_path          String?  @db.VarChar(255)
+  tahun_ajaran       String   @db.VarChar(20)
+  /// Senin pekan pertama; dasar perhitungan minggu_ke.
+  tanggal_awal_pekan DateTime @db.Date
+  /// Larik hari efektif, 1 = Senin … 6 = Sabtu. Contoh: [1,2,3,4,5].
+  hari_efektif       Json
+
+  /// Bobot penilaian kinerja bila skor manajemen terisi (jumlah 100).
+  bobot_kinerja_kehadiran    Decimal @default(50) @db.Decimal(5, 2)
+  bobot_kinerja_administrasi Decimal @default(30) @db.Decimal(5, 2)
+  bobot_kinerja_manajemen    Decimal @default(20) @db.Decimal(5, 2)
+  /// Bobot penilaian kinerja bila skor manajemen kosong atau 0 (jumlah 100).
+  bobot_kinerja_kehadiran_tanpa_manajemen    Decimal @default(50) @db.Decimal(5, 2)
+  bobot_kinerja_administrasi_tanpa_manajemen Decimal @default(50) @db.Decimal(5, 2)
+  /// Bobot penilaian MGMP (jumlah 100).
+  bobot_mgmp_kehadiran    Decimal @default(40) @db.Decimal(5, 2)
+  bobot_mgmp_siswa        Decimal @default(30) @db.Decimal(5, 2)
+  bobot_mgmp_administrasi Decimal @default(30) @db.Decimal(5, 2)
+
+  /// Pengisian penilaian dibuka pada N hari terakhir bulan.
+  jendela_penilaian_hari Int      @default(3) @db.UnsignedTinyInt
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  @@map("sekolah_settings")
+}
+
+model Kelas {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nama_kelas String   @unique @db.VarChar(50)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  users           User[]
+  siswa           Siswa[]
+  jadwal          JadwalMengajar[]
+  kehadiran       Kehadiran[]
+  kehadiran_siswa KehadiranSiswa[]
+
+  @@map("kelas")
+}
+
+model Mgmp {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nama_mapel String   @unique @db.VarChar(100)
+  deskripsi  String?  @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  guru      Guru[]
+  penilaian PenilaianMgmp[]
+
+  @@map("mgmp")
+}
+
+model Guru {
+  id             BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  kode_guru      String      @unique @db.VarChar(20)
+  nip            String?     @unique @db.VarChar(30)
+  nama_guru      String      @db.VarChar(150)
+  mata_pelajaran String      @db.VarChar(100)
+  jabatan        String?     @db.VarChar(100)
+  mgmp_id        BigInt?     @db.UnsignedBigInt
+  status         StatusAktif @default(aktif)
+  created_at     DateTime    @default(now())
+  updated_at     DateTime    @updatedAt
+
+  mgmp      Mgmp?                     @relation(fields: [mgmp_id], references: [id], onDelete: Restrict)
+  jadwal    JadwalMengajar[]
+  kehadiran Kehadiran[]
+  rekap     RekapKehadiranGuru[]
+  penilaian PenilaianKinerjaBulanan[]
+
+  @@index([mgmp_id])
+  @@index([status])
+  @@map("guru")
+}
+
+model Siswa {
+  id            BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  nis           String       @unique @db.VarChar(30)
+  nama_siswa    String       @db.VarChar(150)
+  jenis_kelamin JenisKelamin
+  kelas_id      BigInt       @db.UnsignedBigInt
+  wali_kelas    String?      @db.VarChar(150)
+  status        StatusAktif  @default(aktif)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+
+  kelas     Kelas            @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+  kehadiran KehadiranSiswa[]
+
+  @@index([kelas_id, status])
+  @@map("siswa")
+}
+
+model JadwalMengajar {
+  id                 BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  guru_id            BigInt   @db.UnsignedBigInt
+  kelas_id           BigInt   @db.UnsignedBigInt
+  /// 1 = Senin … 6 = Sabtu.
+  hari               Int      @db.UnsignedTinyInt
+  jam_ke             Int      @db.UnsignedTinyInt
+  total_jam_mengajar Int      @default(1) @db.UnsignedTinyInt
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  guru  Guru  @relation(fields: [guru_id], references: [id], onDelete: Restrict)
+  kelas Kelas @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+
+  @@unique([guru_id, hari, jam_ke])
+  @@index([kelas_id, hari])
+  @@map("jadwal_mengajar")
+}
+
+// ─────────────────────── Kehadiran ───────────────────────
+
+/// Kehadiran guru di kelas.
+model Kehadiran {
+  id               BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  tanggal          DateTime        @db.Date
+  guru_id          BigInt          @db.UnsignedBigInt
+  kelas_id         BigInt          @db.UnsignedBigInt
+  /// 0–12; 0 = pembiasaan pagi.
+  jam_ke           Int             @db.UnsignedTinyInt
+  /// 1–4 JP.
+  lama_jam         Int             @db.UnsignedTinyInt
+  status_kehadiran StatusKehadiran
+  status_tugas     StatusTugas
+  keterangan       String?         @db.Text
+  created_by       BigInt          @db.UnsignedBigInt
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+
+  guru    Guru  @relation(fields: [guru_id], references: [id], onDelete: Restrict)
+  kelas   Kelas @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+  pembuat User  @relation(fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@index([tanggal, guru_id, kelas_id, jam_ke])
+  @@index([tanggal])
+  @@index([status_kehadiran])
+  @@index([guru_id, tanggal])
+  @@index([kelas_id, tanggal])
+  @@map("kehadiran")
+}
+
+model KehadiranSiswa {
+  id         BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  siswa_id   BigInt      @db.UnsignedBigInt
+  kelas_id   BigInt      @db.UnsignedBigInt
+  tanggal    DateTime    @db.Date
+  jam_ke     Int         @default(1) @db.UnsignedTinyInt
+  status     StatusSiswa
+  keterangan String?     @db.Text
+  created_by BigInt      @db.UnsignedBigInt
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  siswa   Siswa @relation(fields: [siswa_id], references: [id], onDelete: Restrict)
+  kelas   Kelas @relation(fields: [kelas_id], references: [id], onDelete: Restrict)
+  pembuat User  @relation(fields: [created_by], references: [id], onDelete: Restrict)
+
+  @@unique([siswa_id, tanggal, jam_ke])
+  @@index([kelas_id, tanggal])
+  @@index([tanggal])
+  @@map("kehadiran_siswa")
+}
+
+// ─────────────────── Rekap dan penilaian ───────────────────
+
+model RekapKehadiranGuru {
+  id                   BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  guru_id              BigInt   @db.UnsignedBigInt
+  /// Tahun kalender dari Senin pekan itu.
+  tahun                Int      @db.UnsignedSmallInt
+  minggu_ke            Int      @db.UnsignedSmallInt
+  /// Senin.
+  tanggal_mulai        DateTime @db.Date
+  /// Hari efektif terakhir.
+  tanggal_selesai      DateTime @db.Date
+  total_jam_wajib      Int      @db.UnsignedInt
+  total_jam_hadir      Int      @db.UnsignedInt
+  persentase_kehadiran Decimal  @db.Decimal(5, 2)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  guru Guru @relation(fields: [guru_id], references: [id], onDelete: Restrict)
+
+  @@unique([guru_id, tahun, minggu_ke])
+  @@index([tahun, minggu_ke])
+  @@index([tanggal_mulai, tanggal_selesai])
+  @@map("rekap_kehadiran_guru")
+}
+
+model PenilaianKinerjaBulanan {
+  id                    BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  guru_id               BigInt   @db.UnsignedBigInt
+  bulan                 Int      @db.UnsignedTinyInt
+  tahun                 Int      @db.UnsignedSmallInt
+  skor_kehadiran        Decimal  @default(0) @db.Decimal(5, 2)
+  skor_administrasi_avg Decimal  @default(0) @db.Decimal(5, 2)
+  skor_manajemen_avg    Decimal? @db.Decimal(5, 2)
+  skor_akhir            Decimal  @default(0) @db.Decimal(5, 2)
+  catatan               String?  @db.Text
+  /// Kosong sampai ada penilai yang mengisi nilai (baris bisa dibuat oleh sinkron).
+  dinilai_oleh          BigInt?  @db.UnsignedBigInt
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  guru    Guru  @relation(fields: [guru_id], references: [id], onDelete: Restrict)
+  penilai User? @relation(fields: [dinilai_oleh], references: [id], onDelete: Restrict)
+
+  @@unique([guru_id, bulan, tahun])
+  @@index([tahun, bulan])
+  @@map("penilaian_kinerja_bulanan")
+}
+
+model PenilaianMgmp {
+  id                BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  mgmp_id           BigInt   @db.UnsignedBigInt
+  bulan             Int      @db.UnsignedTinyInt
+  tahun             Int      @db.UnsignedSmallInt
+  skor_kehadiran    Decimal  @default(0) @db.Decimal(5, 2)
+  skor_siswa        Decimal  @default(0) @db.Decimal(5, 2)
+  skor_administrasi Decimal  @default(0) @db.Decimal(5, 2)
+  skor_akhir        Decimal  @default(0) @db.Decimal(5, 2)
+  catatan           String?  @db.Text
+  dinilai_oleh      BigInt?  @db.UnsignedBigInt
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  mgmp    Mgmp  @relation(fields: [mgmp_id], references: [id], onDelete: Restrict)
+  penilai User? @relation(fields: [dinilai_oleh], references: [id], onDelete: Restrict)
+
+  @@unique([mgmp_id, bulan, tahun])
+  @@index([tahun, bulan])
+  @@map("penilaian_mgmp")
+}
+
+// ───────────────────────── Jejak ─────────────────────────
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  /// Kosong untuk percobaan login yang gagal.
+  user_id     BigInt?  @db.UnsignedBigInt
+  /// Piket, Siswa, Rekap, Penilaian, Laporan, Settings, Auth.
+  module      String   @db.VarChar(30)
+  /// Kode aktivitas, mis. CREATE_KEHADIRAN.
+  aktivitas   String   @db.VarChar(60)
+  entity_type String?  @db.VarChar(60)
+  entity_id   String?  @db.VarChar(64)
+  description String   @db.Text
+  ip_address  String?  @db.VarChar(45)
+  user_agent  String?  @db.VarChar(255)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: Restrict)
+
+  @@index([module])
+  @@index([user_id])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+/// Penyimpanan sesi login (bentuk tabel mengikuti express-mysql-session).
+model Session {
+  session_id String  @id @db.VarChar(128)
+  expires    Int     @db.UnsignedInt
+  data       String? @db.MediumText
+
+  @@index([expires])
+  @@map("sessions")
+}

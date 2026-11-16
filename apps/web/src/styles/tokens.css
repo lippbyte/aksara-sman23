@@ -1,0 +1,97 @@
+/*
+ * Token desain (DESIGN.md §2–3).
+ * Identitas visual produk belum ditetapkan: ganti nilai di :root, komponen tidak perlu disentuh.
+ * Palet bawaan Tailwind dimatikan agar komponen hanya memakai token.
+ */
+
+:root {
+  /* Netral */
+  --bg-app: #f8fafc; /* slate-50 */
+  --bg-surface: #ffffff;
+  --bg-subtle: #f1f5f9; /* slate-100 */
+  --border: #e2e8f0; /* slate-200 */
+  --border-soft: #f1f5f9; /* slate-100 */
+  --text: #0f172a; /* slate-900 */
+  --text-muted: #475569; /* slate-600 */
+  --text-subtle: #64748b; /* slate-500 */
+  --icon-muted: #94a3b8; /* slate-400, hanya ikon dan dekorasi */
+
+  /* Aksi */
+  --primary: #0f172a; /* slate-900 */
+  --primary-hover: #020617;
+  --on-primary: #ffffff;
+  --accent: #4f46e5; /* indigo-600 */
+  --accent-soft: #eef2ff; /* indigo-50 */
+  --focus: #6366f1; /* indigo-500 */
+  --danger: #e11d48; /* rose-600 */
+  --danger-hover: #be123c; /* rose-700 */
+  --overlay: rgb(15 23 42 / 0.5); /* slate-900/50 */
+
+  /* Status: teks, latar, grafik */
+  --status-hadir-text: #047857; /* emerald-700 */
+  --status-hadir-bg: #ecfdf5; /* emerald-50 */
+  --status-hadir-chart: #10b981; /* emerald-500 */
+  --status-mendampingi-text: #4338ca; /* indigo-700 */
+  --status-mendampingi-bg: #eef2ff; /* indigo-50 */
+  --status-mendampingi-chart: #6366f1; /* indigo-500 */
+  --status-tidak-hadir-text: #be123c; /* rose-700 */
+  --status-tidak-hadir-bg: #fff1f2; /* rose-50 */
+  --status-tidak-hadir-chart: #f43f5e; /* rose-500 */
+  --status-izin-text: #b45309; /* amber-700 */
+  --status-izin-bg: #fffbeb; /* amber-50 */
+  --status-izin-chart: #f59e0b; /* amber-500 */
+  --status-sakit-text: #0369a1; /* sky-700 */
+  --status-sakit-bg: #f0f9ff; /* sky-50 */
+  --status-sakit-chart: #0ea5e9; /* sky-500 */
+  --status-netral-text: #334155; /* slate-700 */
+  --status-netral-bg: #f1f5f9; /* slate-100 */
+}
+
+@theme inline {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --text-2xs: 0.6875rem; /* 11 px */
+  --text-2xs--line-height: 1rem;
+
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --color-app: var(--bg-app);
+  --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
+  --color-line: var(--border);
+  --color-line-soft: var(--border-soft);
+  --color-ink: var(--text);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-subtle: var(--text-subtle);
+  --color-icon-muted: var(--icon-muted);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-focus: var(--focus);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-overlay: var(--overlay);
+
+  --color-hadir: var(--status-hadir-text);
+  --color-hadir-soft: var(--status-hadir-bg);
+  --color-hadir-chart: var(--status-hadir-chart);
+  --color-mendampingi: var(--status-mendampingi-text);
+  --color-mendampingi-soft: var(--status-mendampingi-bg);
+  --color-mendampingi-chart: var(--status-mendampingi-chart);
+  --color-tidak-hadir: var(--status-tidak-hadir-text);
+  --color-tidak-hadir-soft: var(--status-tidak-hadir-bg);
+  --color-tidak-hadir-chart: var(--status-tidak-hadir-chart);
+  --color-izin: var(--status-izin-text);
+  --color-izin-soft: var(--status-izin-bg);
+  --color-izin-chart: var(--status-izin-chart);
+  --color-sakit: var(--status-sakit-text);
+  --color-sakit-soft: var(--status-sakit-bg);
+  --color-sakit-chart: var(--status-sakit-chart);
+  --color-netral: var(--status-netral-text);
+  --color-netral-soft: var(--status-netral-bg);
+}

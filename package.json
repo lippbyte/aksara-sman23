@@ -1,0 +1,41 @@
+{
+  "name": "school-management-system",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "School Management System (nama kerja) - In Development",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,green \"npm run dev -w @sms/api\" \"npm run dev -w @sms/web\"",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @sms/api",
+    "db:migrate": "npm run db:migrate -w @sms/api",
+    "db:seed": "npm run db:seed -w @sms/api",
+    "db:reset": "npm run db:reset -w @sms/api",
+    "postinstall": "npm run db:generate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.7",
+    "eslint": "^10.15.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2"
+  },
+  "overrides": {
+    "mysql2": "^3.24.6"
+  }
+}

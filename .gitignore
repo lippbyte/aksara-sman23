@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+apps/api/src/generated/
+apps/api/uploads/
+.claude/
+.vscode/
+.DS_Store
+Thumbs.db
+apps/api/uploads-test/

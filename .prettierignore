@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+package-lock.json
+reference
+**/generated
+**/prisma/migrations
+# Dokumen sumber kebenaran dikelola tim, tidak diformat ulang otomatis
+AGENTS.md
+PROJECT-CONTEXT.md
+DESIGN.md
+PROMPT-REBUILD.md

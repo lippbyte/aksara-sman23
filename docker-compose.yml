@@ -1,0 +1,29 @@
+# MySQL untuk pengembangan lokal. Nilai diambil dari .env di akar repo.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: sms-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?isi MYSQL_ROOT_PASSWORD di .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?isi MYSQL_DATABASE di .env}
+      MYSQL_USER: ${MYSQL_USER:?isi MYSQL_USER di .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?isi MYSQL_PASSWORD di .env}
+      TZ: Asia/Jakarta
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+07:00
+    ports:
+      - '127.0.0.1:${MYSQL_PORT:-3308}:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql_data:
