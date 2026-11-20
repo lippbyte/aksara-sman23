@@ -30,10 +30,32 @@ describe('AppLayout', () => {
     pasangApiTiruan('admin');
     tampilkanApp('/absensi-guru');
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Absensi Guru');
-    expect(screen.getByRole('link', { name: 'Absensi Guru' })).toHaveAttribute(
+    const sidebar = screen.getByRole('navigation', { name: 'Menu utama' });
+    expect(within(sidebar).getByRole('link', { name: 'Absensi Guru' })).toHaveAttribute(
       'aria-current',
       'page',
     );
+    const barBawah = screen.getByRole('navigation', { name: 'Navigasi utama' });
+    expect(within(barBawah).getByRole('link', { name: 'Absensi Guru' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('bar navigasi bawah menampilkan 5 slot yang sesuai peran dan lembar Lainnya', async () => {
+    pasangApiTiruan('admin');
+    tampilkanApp('/tentang');
+    const bar = await screen.findByRole('navigation', { name: 'Navigasi utama' });
+    expect(
+      within(bar)
+        .getAllByRole('link')
+        .map((l) => l.textContent),
+    ).toEqual(['Beranda', 'Absensi Guru', 'Rekap', 'Penilaian']);
+    const lainnya = within(bar).getByRole('button', { name: 'Lainnya' });
+    fireEvent.click(lainnya);
+    const dialog = await screen.findByRole('dialog', { name: 'Menu lainnya' });
+    expect(within(dialog).getByRole('link', { name: 'Pengaturan' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Log Aktivitas' })).toBeInTheDocument();
   });
 
   it('melipat sidebar dan menyimpan pilihan di localStorage', async () => {
@@ -117,7 +139,12 @@ describe('halaman masuk', () => {
   it('login berhasil masuk ke dashboard', async () => {
     const sesi = {
       user: penggunaUji('manajemen_guru'),
-      sekolah: { nama_sekolah: 'SMA Contoh Fiktif', logo_url: null, tahun_ajaran: '2026/2027' },
+      sekolah: {
+        nama_sekolah: 'SMA Contoh Fiktif',
+        logo_url: null,
+        dashboard_background_url: null,
+        tahun_ajaran: '2026/2027',
+      },
     };
     pasangApiTiruan(null, (url) =>
       url.endsWith('/auth/login') ? { body: { data: sesi } } : undefined,

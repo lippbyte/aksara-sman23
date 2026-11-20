@@ -1,6 +1,7 @@
 import { ROLE_LABEL } from '@sms/shared';
-import { ChevronDown, CircleHelp, Info, Menu, UserRound } from 'lucide-react';
+import { ChevronDown, CircleHelp, Info, LogOut, UserRound } from 'lucide-react';
 import { Link, useLocation } from 'react-router';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,29 +10,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useAuth } from '@/lib/auth';
+import { useAuth, useKeluar } from '@/lib/auth';
 import { judulHalaman } from '../nav';
 
-interface HeaderProps {
-  onBukaMenu: () => void;
-}
-
-export function Header({ onBukaMenu }: HeaderProps) {
+/** Header aplikasi: h-12 di mobile (tanpa hamburger, DESIGN §11.2), h-14 di desktop. */
+export function Header() {
   const { pathname } = useLocation();
   const { user } = useAuth();
+  const keluar = useKeluar();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6">
-      <button
-        type="button"
-        onClick={onBukaMenu}
-        aria-label="Buka menu"
-        className="-ml-2 flex size-11 items-center justify-center rounded-lg text-ink-muted hover:bg-subtle hover:text-ink lg:hidden"
-      >
-        <Menu className="size-5" aria-hidden="true" />
-      </button>
-
-      <h1 className="min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-ink">
+    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6 lg:h-14">
+      <h1 className="min-w-0 flex-1 truncate text-lg font-bold tracking-tight text-ink lg:text-xl">
         {judulHalaman(pathname)}
       </h1>
 
@@ -76,6 +66,16 @@ export function Header({ onBukaMenu }: HeaderProps) {
               <Info aria-hidden="true" />
               Tentang
             </Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={keluar.isPending}
+            onSelect={() =>
+              keluar.mutate(undefined, { onSuccess: () => toast.success('Anda sudah keluar.') })
+            }
+          >
+            <LogOut aria-hidden="true" />
+            Keluar
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

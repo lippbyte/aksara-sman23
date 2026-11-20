@@ -21,11 +21,10 @@ import { usePengguna } from '@/lib/auth';
 import { angka, namaBulan } from '@/lib/format';
 import { urlEkspor, useDaftarKinerja, useSimpanKinerja, useSinkronPenilaian } from './api';
 import {
-  InfoJendela,
+  PanelPeriodePenilaian,
   PeringatanPekan,
   keSkor,
   LencanaPredikat,
-  PilihPeriode,
   TeksSkor,
   usePeriodeUrl,
 } from './komponen';
@@ -98,7 +97,8 @@ export function PenilaianKinerjaPage() {
         sel: (b) => (
           <Button
             variant="ghost"
-            size="touch"
+            size="sm"
+            className="min-h-11 md:min-h-0"
             disabled={!bolehIsi}
             aria-label={`Nilai ${b.nama_guru}`}
             onClick={() => setDinilai(b)}
@@ -116,8 +116,27 @@ export function PenilaianKinerjaPage() {
 
   return (
     <div>
-      <PilihPeriode periode={periode} onUbah={atur}>
-        <FilterItem label="Cari guru" className="sm:w-56">
+      <PanelPeriodePenilaian
+        periode={periode}
+        onUbah={atur}
+        jendela={jendela}
+        admin={admin}
+        aksi={
+          <>
+            <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
+              <RefreshCw aria-hidden="true" />
+              Sinkronkan skor kehadiran
+            </Button>
+            <Button asChild size="touch" variant="secondary">
+              <a href={urlEkspor('kinerja', periode)} download>
+                <Download aria-hidden="true" />
+                Ekspor CSV
+              </a>
+            </Button>
+          </>
+        }
+      >
+        <FilterItem label="Cari guru" className="sm:w-48">
           {(id) => (
             <Input
               id={id}
@@ -128,32 +147,17 @@ export function PenilaianKinerjaPage() {
             />
           )}
         </FilterItem>
-      </PilihPeriode>
-      <InfoJendela jendela={jendela} periode={periode} admin={admin} />
+      </PanelPeriodePenilaian>
       <PeringatanPekan
         belum={daftar.data?.pekan_belum_disinkron}
         sebagian={daftar.data?.pekan_rekap_sebagian}
         bolehRekap={user.role === 'admin' || user.role === 'manajemen_guru'}
       />
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-ink-subtle">
-          Skor kehadiran diisi otomatis dari rekap pekan yang beririsan dengan bulan ini. Pastikan
-          rekap pekan sudah disinkronkan.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
-            <RefreshCw aria-hidden="true" />
-            Sinkronkan skor kehadiran
-          </Button>
-          <Button asChild size="touch" variant="secondary">
-            <a href={urlEkspor('kinerja', periode)} download>
-              <Download aria-hidden="true" />
-              Ekspor CSV
-            </a>
-          </Button>
-        </div>
-      </div>
+      <p className="mb-3 text-xs text-ink-subtle">
+        Skor kehadiran diisi otomatis dari rekap pekan yang beririsan dengan bulan ini. Pastikan
+        rekap pekan sudah disinkronkan.
+      </p>
 
       <DataTable
         kolom={kolom}

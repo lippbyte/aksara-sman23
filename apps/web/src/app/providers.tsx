@@ -27,7 +27,7 @@ export function Providers({ children, client }: { children: ReactNode; client?: 
       <AuthProvider>
         <TooltipProvider delayDuration={150}>{children}</TooltipProvider>
       </AuthProvider>
-      <Toaster position="top-right" mobileOffset={16} richColors={false} />
+      <Toaster position="top-right" mobileOffset={{ top: 56, bottom: 72 }} richColors={false} />
     </QueryClientProvider>
   );
 }

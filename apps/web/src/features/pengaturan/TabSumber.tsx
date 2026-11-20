@@ -168,50 +168,53 @@ export function TabSumber<T extends { id: number }>({
     [kolom, aksiTambahan, labelBaris],
   );
 
+  const tombolTambah = (
+    <Button size="touch" onClick={() => setForm({ mode: 'buat' })}>
+      <Plus aria-hidden="true" />
+      Tambah {nama}
+    </Button>
+  );
+
   return (
     <div>
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <FilterBar
-          className="mb-0 flex-1"
-          onReset={cari || filter.length > 0 ? f.reset : undefined}
-          adaFilter={f.adaFilter}
-        >
-          {cari && (
-            <FilterItem label="Cari" className="sm:w-56">
-              {(id) => (
-                <KotakCari
-                  id={id}
-                  nilai={f.nilai.q ?? ''}
-                  onUbah={(v) => f.atur('q', v)}
-                  placeholder={cari}
-                />
-              )}
-            </FilterItem>
-          )}
-          {filter.map((def) => (
-            <FilterItem key={def.kunci} label={def.label}>
-              {(id) => (
-                <Select
-                  id={id}
-                  value={f.nilai[def.kunci] ?? ''}
-                  onChange={(e) => f.atur(def.kunci, e.target.value)}
-                >
-                  <option value="">Semua</option>
-                  {def.opsi.map((o) => (
-                    <option key={o.nilai} value={o.nilai}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </FilterItem>
-          ))}
-        </FilterBar>
-        <Button size="touch" onClick={() => setForm({ mode: 'buat' })}>
-          <Plus aria-hidden="true" />
-          Tambah {nama}
-        </Button>
-      </div>
+      <FilterBar
+        lembarMobile
+        onReset={cari || filter.length > 0 ? f.reset : undefined}
+        adaFilter={f.adaFilter}
+        jumlahAktif={f.jumlahAktif}
+        aksi={tombolTambah}
+      >
+        {cari && (
+          <FilterItem label="Cari" className="sm:w-52">
+            {(id) => (
+              <KotakCari
+                id={id}
+                nilai={f.nilai.q ?? ''}
+                onUbah={(v) => f.atur('q', v)}
+                placeholder={cari}
+              />
+            )}
+          </FilterItem>
+        )}
+        {filter.map((def) => (
+          <FilterItem key={def.kunci} label={def.label}>
+            {(id) => (
+              <Select
+                id={id}
+                value={f.nilai[def.kunci] ?? ''}
+                onChange={(e) => f.atur(def.kunci, e.target.value)}
+              >
+                <option value="">Semua</option>
+                {def.opsi.map((o) => (
+                  <option key={o.nilai} value={o.nilai}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FilterItem>
+        ))}
+      </FilterBar>
 
       <DataTable
         kolom={kolomLengkap}
@@ -328,6 +331,7 @@ function FormSumber({
   return (
     <Dialog
       open
+      layarPenuhMobile
       onOpenChange={(buka) => !buka && onTutup()}
       judul={id === null ? `Tambah ${nama}` : `Ubah ${nama}`}
     >

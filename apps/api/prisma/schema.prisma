@@ -74,10 +74,12 @@ model User {
 
 /// Satu baris: pengaturan sekolah untuk instalasi ini.
 model SekolahSettings {
-  id                 BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  nama_sekolah       String   @db.VarChar(150)
-  logo_path          String?  @db.VarChar(255)
-  tahun_ajaran       String   @db.VarChar(20)
+  id                        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nama_sekolah              String   @db.VarChar(150)
+  logo_path                 String?  @db.VarChar(255)
+  login_background_path     String?  @db.VarChar(255)
+  dashboard_background_path String?  @db.VarChar(255)
+  tahun_ajaran              String   @db.VarChar(20)
   /// Senin pekan pertama; dasar perhitungan minggu_ke.
   tanggal_awal_pekan DateTime @db.Date
   /// Larik hari efektif, 1 = Senin … 6 = Sabtu. Contoh: [1,2,3,4,5].

@@ -22,11 +22,10 @@ import {
   useSkorSiswaKelas,
 } from './api';
 import {
-  InfoJendela,
+  PanelPeriodePenilaian,
   PeringatanPekan,
   keSkor,
   LencanaPredikat,
-  PilihPeriode,
   TeksSkor,
   usePeriodeUrl,
 } from './komponen';
@@ -141,7 +140,8 @@ export function PenilaianMgmpPage() {
           <div className="flex justify-end gap-1">
             <Button
               variant="ghost"
-              size="touch"
+              size="sm"
+              className="min-h-11 md:min-h-0"
               aria-label={`Skor siswa per kelas MGMP ${b.nama_mapel}`}
               onClick={() => setSkorKelas(b)}
             >
@@ -150,7 +150,8 @@ export function PenilaianMgmpPage() {
             </Button>
             <Button
               variant="ghost"
-              size="touch"
+              size="sm"
+              className="min-h-11 md:min-h-0"
               disabled={!bolehIsi}
               aria-label={`Nilai MGMP ${b.nama_mapel}`}
               onClick={() => setDinilai(b)}
@@ -164,10 +165,30 @@ export function PenilaianMgmpPage() {
     ];
   }, [bolehIsi, sekretaris, user.nama_kelas]);
 
+  const aksiPanel = !sekretaris ? (
+    <>
+      <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
+        <RefreshCw aria-hidden="true" />
+        Sinkronkan skor otomatis
+      </Button>
+      <Button asChild size="touch" variant="secondary">
+        <a href={urlEkspor('mgmp', periode)} download>
+          <Download aria-hidden="true" />
+          Ekspor CSV
+        </a>
+      </Button>
+    </>
+  ) : undefined;
+
   return (
     <div>
-      <PilihPeriode periode={periode} onUbah={atur} />
-      <InfoJendela jendela={jendela} periode={periode} admin={admin} />
+      <PanelPeriodePenilaian
+        periode={periode}
+        onUbah={atur}
+        jendela={jendela}
+        admin={admin}
+        aksi={aksiPanel}
+      />
       {!sekretaris && (
         <PeringatanPekan
           belum={daftar.data?.pekan_belum_disinkron}
@@ -176,31 +197,11 @@ export function PenilaianMgmpPage() {
         />
       )}
 
-      {sekretaris ? (
-        <p className="mb-3 text-xs text-ink-subtle">
-          Isi skor siswa untuk kelas {user.nama_kelas ?? 'Anda'}. Skor siswa MGMP adalah rata-rata
-          kelas yang sudah mengisi.
-        </p>
-      ) : (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-ink-subtle">
-            Skor kehadiran diisi otomatis dari rekap pekan guru anggota MGMP; skor siswa adalah
-            rata-rata skor yang diisi tiap kelas.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
-              <RefreshCw aria-hidden="true" />
-              Sinkronkan skor otomatis
-            </Button>
-            <Button asChild size="touch" variant="secondary">
-              <a href={urlEkspor('mgmp', periode)} download>
-                <Download aria-hidden="true" />
-                Ekspor CSV
-              </a>
-            </Button>
-          </div>
-        </div>
-      )}
+      <p className="mb-3 text-xs text-ink-subtle">
+        {sekretaris
+          ? `Isi skor siswa untuk kelas ${user.nama_kelas ?? 'Anda'}. Skor siswa MGMP adalah rata-rata kelas yang sudah mengisi.`
+          : 'Skor kehadiran diisi otomatis dari rekap pekan guru anggota MGMP; skor siswa adalah rata-rata skor yang diisi tiap kelas.'}
+      </p>
 
       <DataTable
         kolom={kolom}

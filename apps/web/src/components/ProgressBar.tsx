@@ -50,7 +50,10 @@ export function ProgressBar({ nilai, label, className }: ProgressBarProps) {
         aria-valuetext={persen(terbatas)}
         className="h-1.5 w-full max-w-28 min-w-12 overflow-hidden rounded-full bg-subtle"
       >
-        <div className={cn('h-full rounded-full', ISI[nada])} style={{ width: `${terbatas}%` }} />
+        <div
+          className={cn('progress-isi h-full rounded-full', ISI[nada])}
+          style={{ width: `${terbatas}%` }}
+        />
       </div>
       <span className={cn('w-16 text-right text-sm font-semibold tabular-nums', TEKS[nada])}>
         {persen(terbatas)}

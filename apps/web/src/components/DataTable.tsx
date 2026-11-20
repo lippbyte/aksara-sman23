@@ -1,6 +1,6 @@
 import { tableFeatures, useTable, type ColumnDef, type RowData } from '@tanstack/react-table';
 import { ChevronLeft, ChevronRight, Inbox, TriangleAlert, type LucideIcon } from 'lucide-react';
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { angka } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './EmptyState';
@@ -36,7 +36,7 @@ interface DataTableProps<T> {
   barisSkeleton?: number;
 }
 
-/** Tabel data (TanStack Table); di ponsel berubah menjadi daftar kartu (DESIGN §6). */
+/** Tabel data (TanStack Table); di ponsel berubah menjadi daftar kartu (DESIGN §6 & §11.5). */
 export function DataTable<T extends RowData>({
   kolom,
   data,
@@ -113,8 +113,13 @@ export function DataTable<T extends RowData>({
 
   return (
     <div className={cn(memuat && 'opacity-60 transition-opacity duration-200')}>
-      {/* Desktop dan tablet: tabel */}
-      <div className="hidden overflow-x-auto rounded-xl border border-line bg-surface md:block">
+      {/* Desktop dan tablet (>=768 px): tabel dengan kontainer gulir aksesibel papan ketik */}
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label={keterangan}
+        className="hidden overflow-x-auto rounded-xl border border-line bg-surface md:block"
+      >
         <table className="w-full text-left text-sm">
           <caption className="sr-only">{keterangan}</caption>
           <thead>
@@ -127,7 +132,7 @@ export function DataTable<T extends RowData>({
                       key={h.id}
                       scope="col"
                       className={cn(
-                        'px-4 py-2.5 text-2xs font-semibold tracking-wider whitespace-nowrap text-ink-subtle uppercase',
+                        'px-3 py-2.5 text-2xs font-semibold tracking-wider whitespace-nowrap text-ink-subtle uppercase',
                         k?.angka && 'text-right',
                         k?.aksi && 'text-right',
                       )}
@@ -146,7 +151,7 @@ export function DataTable<T extends RowData>({
                   <td
                     key={k.id}
                     className={cn(
-                      'px-4 py-2.5 align-middle text-ink',
+                      'px-3 py-2.5 align-middle text-ink',
                       k.angka && 'text-right tabular-nums',
                       k.aksi && 'text-right whitespace-nowrap',
                       k.className,
@@ -161,7 +166,7 @@ export function DataTable<T extends RowData>({
         </table>
       </div>
 
-      {/* Ponsel: daftar kartu */}
+      {/* Ponsel (<768 px): daftar kartu */}
       <ul className="flex flex-col gap-3 md:hidden" aria-label={keterangan}>
         {rows.map((row) => {
           const utama = kolom.find((k) => k.utama) ?? kolom[0];
@@ -176,7 +181,7 @@ export function DataTable<T extends RowData>({
                 {lain.map((k) => (
                   <div key={k.id} className="contents">
                     <dt className="text-ink-subtle">{k.judul}</dt>
-                    <dd className={cn('text-right text-ink', k.angka && 'tabular-nums')}>
+                    <dd className={cn('min-w-0 text-right text-ink', k.angka && 'tabular-nums')}>
                       {k.sel(row.original)}
                     </dd>
                   </div>
@@ -205,10 +210,30 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
-  if (total === 0) return null;
   const jumlahHalaman = Math.max(1, Math.ceil(total / pageSize));
+  const [inputHalaman, setInputHalaman] = useState(String(page));
+
+  useEffect(() => {
+    setInputHalaman(String(page));
+  }, [page]);
+
+  if (total === 0) return null;
+
   const dari = (page - 1) * pageSize + 1;
   const sampai = Math.min(total, page * pageSize);
+
+  function lompat(e?: FormEvent) {
+    e?.preventDefault();
+    const angkaMasuk = Number.parseInt(inputHalaman, 10);
+    if (!Number.isFinite(angkaMasuk)) {
+      setInputHalaman(String(page));
+      return;
+    }
+    const tujuan = Math.min(jumlahHalaman, Math.max(1, angkaMasuk));
+    setInputHalaman(String(tujuan));
+    if (tujuan !== page) onUbah(tujuan);
+  }
+
   return (
     <nav
       aria-label="Navigasi halaman"
@@ -217,7 +242,7 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
       <p className="tabular-nums" aria-live="polite">
         Menampilkan {angka(dari)}–{angka(sampai)} dari {angka(total)}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           variant="secondary"
           size="touch"
@@ -227,9 +252,35 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
           <ChevronLeft aria-hidden="true" />
           Sebelumnya
         </Button>
-        <span className="tabular-nums">
-          {angka(page)} / {angka(jumlahHalaman)}
-        </span>
+
+        {jumlahHalaman > 1 ? (
+          <form onSubmit={lompat} className="flex items-center gap-1.5">
+            <label htmlFor="loncat-halaman" className="sr-only">
+              Loncat ke halaman
+            </label>
+            <input
+              id="loncat-halaman"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={jumlahHalaman}
+              aria-label="Loncat ke halaman"
+              value={inputHalaman}
+              onChange={(e) => setInputHalaman(e.target.value)}
+              onBlur={() => lompat()}
+              className="h-11 w-14 rounded-lg border border-line bg-surface px-2 text-center text-sm text-ink tabular-nums focus:border-accent focus:outline-none sm:h-9"
+            />
+            <span className="text-ink-subtle tabular-nums">/ {angka(jumlahHalaman)}</span>
+            <Button type="submit" variant="secondary" size="sm" className="h-11 px-2.5 sm:h-9">
+              Ke
+            </Button>
+          </form>
+        ) : (
+          <span className="px-1 tabular-nums">
+            {angka(page)} / {angka(jumlahHalaman)}
+          </span>
+        )}
+
         <Button
           variant="secondary"
           size="touch"

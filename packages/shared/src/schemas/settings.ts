@@ -95,6 +95,8 @@ export type SekolahInput = z.infer<typeof sekolahSchema>;
 export interface Sekolah extends SekolahInput {
   id: number;
   logo_url: string | null;
+  login_background_url: string | null;
+  dashboard_background_url: string | null;
 }
 
 /** Logo sebagai data URL (PNG, JPEG, atau WebP). */
@@ -108,6 +110,43 @@ export const logoSchema = z.object({
     .max(400_000, 'Ukuran logo maksimal sekitar 280 KB.'),
 });
 export type LogoInput = z.infer<typeof logoSchema>;
+
+export const JENIS_LATAR = ['masuk', 'dashboard'] as const;
+export type JenisLatar = (typeof JENIS_LATAR)[number];
+
+export const UKURAN_LATAR = [640, 1280, 1920] as const;
+export type UkuranLatar = (typeof UKURAN_LATAR)[number];
+
+export const FORMAT_LATAR = ['webp', 'jpeg'] as const;
+export type FormatLatar = (typeof FORMAT_LATAR)[number];
+
+export const jenisLatarParamSchema = z.object({
+  jenis: z.enum(JENIS_LATAR, { error: 'Jenis latar harus "masuk" atau "dashboard".' }),
+});
+
+/** Gambar latar sekolah sebagai data URL (PNG, JPEG, atau WebP; maks ±5 MB biner). */
+export const latarGambarSchema = z.object({
+  data_url: z
+    .string()
+    .regex(
+      /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/,
+      'Gambar latar harus PNG, JPEG, atau WebP.',
+    )
+    .max(7_000_000, 'Ukuran gambar latar maksimal 5 MB.'),
+});
+export type LatarGambarInput = z.infer<typeof latarGambarSchema>;
+
+export const latarQuerySchema = z.object({
+  w: z.preprocess(
+    (v) => (v === '' || v === undefined ? 1280 : Number(v)),
+    z.union([z.literal(640), z.literal(1280), z.literal(1920)]).default(1280),
+  ),
+  fmt: z.preprocess(
+    (v) => (v === '' || v === undefined ? 'webp' : v),
+    z.enum(FORMAT_LATAR).default('webp'),
+  ),
+});
+export type LatarQuery = z.infer<typeof latarQuerySchema>;
 
 // ───────────── Kelas ─────────────
 

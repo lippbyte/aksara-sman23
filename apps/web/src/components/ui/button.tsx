@@ -5,7 +5,7 @@ import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 disabled:pointer-events-none disabled:opacity-60 [&_svg]:size-4 [&_svg]:shrink-0',
+  'tombol-tekan inline-flex shrink-0 items-center justify-center gap-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors duration-200 disabled:pointer-events-none disabled:opacity-60 [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -15,6 +15,7 @@ const buttonVariants = cva(
         danger: 'bg-danger text-on-primary hover:bg-danger-hover',
       },
       size: {
+        sm: 'h-8 px-2.5 text-xs [&_svg]:size-3.5',
         md: 'h-9 px-3.5',
         /** Aksi utama form di ponsel: 44 px. */
         touch: 'h-11 px-4 sm:h-9 sm:px-3.5',

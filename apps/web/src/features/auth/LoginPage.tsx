@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, type LoginInput } from '@sms/shared';
 import { CircleAlert, School } from 'lucide-react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { pesanGalat } from '@/lib/api';
 import { useAuth, useMasuk } from '@/lib/auth';
 import { APP_NAME, PENGEMBANG, STATUS_PRODUK } from '@/lib/config';
+import { cn } from '@/lib/utils';
 
 export function LoginPage() {
   const { status } = useAuth();
@@ -16,6 +18,8 @@ export function LoginPage() {
   const navigate = useNavigate();
   const lokasi = useLocation();
   const tujuan = (lokasi.state as { dari?: string } | null)?.dari ?? '/';
+  const [latarSiap, setLatarSiap] = useState(false);
+  const [logoSiap, setLogoSiap] = useState(true);
 
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -29,12 +33,50 @@ export function LoginPage() {
   });
 
   return (
-    <div className="flex min-h-dvh flex-col bg-app">
-      <main className="flex flex-1 items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm">
+    <div className="pola-latar-bawaan relative flex min-h-dvh flex-col overflow-hidden">
+      {/* Lapisan gambar latar dekoratif terpisah agar kontras teks tetap tajam (DESIGN §11.3). */}
+      <div className="pointer-events-none fixed inset-0 z-0" aria-hidden="true">
+        <picture>
+          <source
+            type="image/webp"
+            srcSet="/api/v1/sekolah/latar/masuk?w=640&fmt=webp 640w, /api/v1/sekolah/latar/masuk?w=1280&fmt=webp 1280w, /api/v1/sekolah/latar/masuk?w=1920&fmt=webp 1920w"
+            sizes="100vw"
+          />
+          <img
+            src="/api/v1/sekolah/latar/masuk?w=1280&fmt=jpeg"
+            srcSet="/api/v1/sekolah/latar/masuk?w=640&fmt=jpeg 640w, /api/v1/sekolah/latar/masuk?w=1280&fmt=jpeg 1280w, /api/v1/sekolah/latar/masuk?w=1920&fmt=jpeg 1920w"
+            sizes="100vw"
+            alt=""
+            decoding="async"
+            fetchPriority="low"
+            onLoad={() => setLatarSiap(true)}
+            onError={() => setLatarSiap(false)}
+            className={cn(
+              'h-full w-full object-cover transition-opacity duration-300',
+              latarSiap ? 'opacity-[0.13]' : 'opacity-0',
+            )}
+          />
+        </picture>
+        {latarSiap && (
+          <div className="absolute inset-0 bg-gradient-to-b from-app/60 via-app/45 to-app/75" />
+        )}
+      </div>
+
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-10">
+        <div className="halaman-masuk w-full max-w-sm">
           <div className="mb-6 flex flex-col items-center gap-3 text-center">
-            <span className="flex size-12 items-center justify-center rounded-xl border border-line bg-surface">
-              <School className="size-6 text-ink-muted" aria-hidden="true" />
+            <span className="flex size-12 items-center justify-center overflow-hidden rounded-xl border border-line bg-surface shadow-xs">
+              {logoSiap ? (
+                <img
+                  src="/api/v1/sekolah/logo"
+                  alt=""
+                  decoding="async"
+                  onError={() => setLogoSiap(false)}
+                  className="size-10 object-contain"
+                />
+              ) : (
+                <School className="size-6 text-ink-muted" aria-hidden="true" />
+              )}
             </span>
             <div>
               <h1 className="text-xl font-bold tracking-tight text-ink">{APP_NAME}</h1>
@@ -45,7 +87,7 @@ export function LoginPage() {
           <form
             onSubmit={kirim}
             noValidate
-            className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5"
+            className="kartu-kaca flex flex-col gap-4 rounded-xl border border-line p-5 shadow-xs"
           >
             {masuk.isError && (
               <p
@@ -72,13 +114,13 @@ export function LoginPage() {
                 {...form.register('password')}
               />
             </Field>
-            <Button type="submit" size="touch" loading={masuk.isPending}>
+            <Button type="submit" className="h-12 w-full sm:h-11" loading={masuk.isPending}>
               Masuk
             </Button>
           </form>
         </div>
       </main>
-      <footer className="px-4 py-3 text-center text-xs text-ink-subtle">
+      <footer className="relative z-10 px-4 py-3 text-center text-xs text-ink-subtle">
         Dikembangkan oleh {PENGEMBANG} · {STATUS_PRODUK}
       </footer>
     </div>

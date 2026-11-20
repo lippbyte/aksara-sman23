@@ -18,7 +18,13 @@ import { penilaianKinerjaRouter } from './modules/penilaian-kinerja/routes';
 import { penilaianMgmpRouter } from './modules/penilaian-mgmp/routes';
 import { rekapRouter } from './modules/rekap/routes';
 import { referensiRouter } from './modules/referensi/routes';
-import { logoSekolahHandler, settingsRouter } from './modules/settings/routes';
+import { requireAuth } from './middleware/requireAuth';
+import {
+  latarDashboardHandler,
+  latarMasukHandler,
+  logoSekolahHandler,
+  settingsRouter,
+} from './modules/settings/routes';
 
 export function createApp() {
   const app = express();
@@ -44,16 +50,19 @@ export function createApp() {
     );
   }
 
-  // Batas ukuran body: logo (data URL) lebih longgar, selebihnya 100 KB.
+  // Batas ukuran body: gambar latar & logo lebih longgar, selebihnya 100 KB.
   app.use('/api/v1/settings/sekolah/logo', express.json({ limit: '500kb' }));
+  app.use('/api/v1/settings/sekolah/latar', express.json({ limit: '8mb' }));
   app.use(express.json({ limit: '100kb' }));
 
   const v1 = Router();
   v1.use('/health', healthRouter);
   v1.get('/sekolah/logo', logoSekolahHandler);
+  v1.get('/sekolah/latar/masuk', latarMasukHandler);
 
   // Mulai dari sini semua rute memakai sesi dan pemeriksaan asal permintaan.
   v1.use(sessionMiddleware, batasSesi, originCheck);
+  v1.get('/sekolah/latar/dashboard', requireAuth, latarDashboardHandler);
   v1.use('/auth', buatAuthRouter());
   v1.use('/referensi', referensiRouter);
   v1.use('/dashboard', dashboardRouter);

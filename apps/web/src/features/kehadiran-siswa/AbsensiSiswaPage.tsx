@@ -319,7 +319,7 @@ function FormSesi({ sesi, bolehUbah }: { sesi: SesiAbsenSiswa; bolehUbah: boolea
       </ul>
 
       {bolehUbah && (
-        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-line bg-surface px-4 py-3 sm:px-5">
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-20 flex flex-wrap items-center justify-between gap-3 rounded-b-xl border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-sm sm:px-5 lg:bottom-0">
           <p className="text-xs text-ink-muted" aria-live="polite">
             {berubah > 0
               ? `${angka(berubah)} perubahan belum disimpan.`

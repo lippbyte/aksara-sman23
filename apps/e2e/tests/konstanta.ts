@@ -7,6 +7,8 @@ export const PASSWORD_E2E = 'kata-sandi-e2e-123';
 
 /** Akun contoh dari seeder (`apps/api/prisma/seed-data.ts`). */
 export const AKUN = {
-  sekretaris: 'sekretaris.x1@contoh.test',
+  admin: 'admin@contoh.test',
   manajemen: 'manajemen@contoh.test',
+  sekretaris: 'sekretaris.x1@contoh.test',
+  penilai: 'penilai@contoh.test',
 } as const;

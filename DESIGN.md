@@ -153,3 +153,71 @@ Ketentuan: tidak ada grafik 3D, tidak ada pie untuk lebih dari 4 kategori, sumbu
 - Tidak menampilkan data nyata di tangkapan layar, demo, atau dokumentasi.
 - Tidak menulis klaim keamanan atau kepatuhan di UI.
 - Tidak memakai identitas visual EDILAKSO atau produk EDILAKSO lain di UI aplikasi.
+
+---
+
+## 11. Peningkatan UI/UX, navigasi mobile, latar, dan gerak halus
+
+### 11.1 Sistem desain v1 (Laravel) dipertahankan, dengan empat penyesuaian
+Ringkasan sistem v1: Inter, slate netral, aksen indigo, border tipis alih-alih bayangan tebal, `rounded-xl` untuk kartu dan `rounded-lg` untuk input, tombol utama slate-900, kaca pada halaman masuk. Semua itu sudah ada di §2–6 dan tetap berlaku. Penyesuaian dari v1:
+
+1. **`text-2xs` = 11 px / 16 px** (v1: 10 px). Tidak ada ukuran di bawah itu.
+2. **Tanpa `font-black` dan `uppercase` pada lencana status.** Bobot maksimum 700. `uppercase` hanya untuk label kecil dan header tabel.
+3. **`slate-400` hanya untuk ikon dan dekorasi**, bukan teks.
+4. **Mode gelap ditunda.** Token tetap dibuat sebagai variabel CSS sehingga mudah ditambahkan nanti. `[PERLU DIKONFIRMASI]` apakah perlu di versi pertama.
+
+### 11.2 Navigasi mobile (<1024 px): bar bawah ala aplikasi
+
+- Di bawah 1024 px, sidebar diganti **bar navigasi bawah** tetap. Di 1024 px ke atas sidebar tetap.
+- **Maksimal lima slot**: empat tujuan utama + "Lainnya" (lembar dari bawah berisi menu sisanya). Isi per peran (usulan):
+
+| Peran | Slot 1–4 | Slot 5 |
+|---|---|---|
+| `sekretaris_kelas` | Beranda · Absensi Guru · Absensi Siswa · Penilaian MGMP | Akun |
+| `guru_penilai` | Beranda · Absensi Guru · Penilaian Kinerja · Penilaian MGMP | Akun |
+| `manajemen_guru` | Beranda · Rekap · Penilaian · Laporan | Lainnya |
+| `admin` | Beranda · Absensi Guru · Rekap · Penilaian | Lainnya |
+
+- Tinggi 56 px **ditambah** `env(safe-area-inset-bottom)`. Area sentuh tiap slot minimal 48 × 48 px. Ikon 22 px dengan **label selalu tampil** (11 px). Slot aktif: ikon dan label berwarna indigo-600 dengan penanda pil di belakang ikon, jadi tidak mengandalkan warna saja.
+- Semantik: `<nav aria-label="Navigasi utama">`, `aria-current="page"`, urutan fokus papan ketik logis.
+- Konten halaman diberi `padding-bottom` setinggi bar + safe area. Tombol aksi utama form (mis. "Simpan") berupa bar lekat **di atas** bar navigasi.
+- Bar disembunyikan saat papan ketik virtual terbuka, supaya tidak menutupi isian.
+- Header mobile: `h-12`, judul halaman + menu akun. **Tanpa hamburger.** Menu sisa ada di "Lainnya".
+- Lembar "Lainnya": muncul dari bawah, bisa ditutup dengan tombol, geser ke bawah, dan Esc, fokus terkunci di dalamnya dan kembali ke pemicu saat ditutup.
+- Perpindahan halaman memakai penanda aktif yang bergeser halus (lihat 11.4).
+
+### 11.3 Gambar latar
+
+**Halaman masuk**
+- Foto tampak depan sekolah sebagai lapisan latar penuh layar, ditumpuk dengan lapisan putih/slate sehingga foto hanya terlihat samar (setara opasitas 8–15 %). **Jangan** menurunkan opasitas elemen yang berisi teks; pakai lapisan terpisah (pseudo-element atau `<img>` dekoratif) agar teks tetap tajam.
+- Kartu masuk: putih 90 %+ dengan `backdrop-filter: blur(12px)` (cadangan: putih solid). Kontras teks tetap ≥ 4,5:1.
+- Bila foto belum diunggah: pola/gradasi bawaan dari token, bukan area kosong.
+
+**Dashboard**
+- Jangan menaruh foto penuh di belakang tabel dan grafik. Pendekatan yang disarankan: **lapisan foto di bagian atas halaman** (±280 px, opasitas 6–10 %, abu-abu, sedikit blur) yang memudar ke `--bg-app` dengan `mask-image: linear-gradient`. Kartu tetap putih solid.
+- Area kosong di bawah konten diisi lewat tata letak (kartu yang lebih tinggi, ringkasan tambahan, state kosong yang informatif), bukan hanya gambar.
+
+**Ketentuan gambar**
+- Diunggah admin lewat **Pengaturan → Sekolah** (dua slot: latar masuk, latar dashboard; opsional). Disimpan di luar git.
+- Server mengubah ukuran menjadi 640/1280/1920 px dalam WebP (cadangan JPEG), membuang EXIF, anggaran ≤ 150 KB untuk varian terbesar. Pakai `srcset`/`image-set`, `decoding="async"`, tanpa menunda LCP form masuk.
+- Gambar dekoratif: `alt=""`. Foto tidak boleh memuat wajah orang yang dapat dikenali, dan sekolah harus mengizinkan pemakaiannya.
+
+### 11.4 Gerak halus
+
+- Token: `--dur-fast: 150ms`, `--dur-base: 220ms`, `--dur-slow: 320ms`, `--ease-out: cubic-bezier(.2,.8,.2,1)`.
+- Yang dianimasikan: masuk halaman (fade + geser 6 px, sekali), kartu dashboard muncul berurutan (jeda 40 ms, maksimal 8 kartu), penanda aktif bar bawah, lembar dan dialog (masuk/keluar), toast, tekan tombol (`scale(.98)`), isi ProgressBar, grafik tergambar sekali saat pertama muncul, skeleton.
+- Aturan: hanya `transform` dan `opacity`; tidak menggeser tata letak (CLS 0); tidak ada animasi pada baris tabel, ketikan, atau angka yang sedang diedit; tidak ada animasi berulang selain indikator memuat.
+- `@media (prefers-reduced-motion: reduce)`: hilangkan gerak spasial, sisakan fade ≤ 100 ms, matikan animasi grafik.
+- Utamakan fitur platform (transisi CSS, `@starting-style`, View Transitions untuk perpindahan halaman, animasi bergulir) **dengan cadangan** tanpa animasi. Cek dukungan browser lewat panduan sebelum memakai.
+- Uji di Chrome DevTools dengan CPU 4× lebih lambat; tidak boleh patah-patah.
+
+### 11.5 Responsif per halaman
+
+| Halaman | Mobile (360–1023 px) |
+|---|---|
+| Masuk | Satu kolom, kartu di tengah, latar foto, tombol penuh lebar 48 px |
+| Dashboard | Satu kolom; KPI 2 × 2; grafik penuh lebar dengan tabel alternatif ringkas; "Catat" sebagai aksi utama untuk sekretaris |
+| Absensi Guru / Siswa | Daftar kartu (bukan tabel); filter di lembar bawah; form status memakai SegmentedStatus; bar simpan lekat |
+| Rekap, Penilaian, Laporan | Kartu per guru/MGMP dengan ProgressBar; tabel penuh hanya di ≥ 768 px; ekspor di menu aksi |
+| Pengaturan | Tab menjadi daftar yang dibuka satu per satu; form di layar penuh |
+| Semua | Tidak ada gulir horizontal pada 360 px; teks dasar ≥ 14 px; fokus terlihat |

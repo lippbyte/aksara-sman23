@@ -11,18 +11,31 @@ interface DialogProps {
   deskripsi?: string;
   children: ReactNode;
   className?: string;
+  /** Di ponsel (<640 px) membuka layar penuh (mis. form Pengaturan, DESIGN §11.5). */
+  layarPenuhMobile?: boolean;
 }
 
 /** Dialog modal; di ponsel menempel di bawah layar agar mudah dijangkau. */
-export function Dialog({ open, onOpenChange, judul, deskripsi, children, className }: DialogProps) {
+export function Dialog({
+  open,
+  onOpenChange,
+  judul,
+  deskripsi,
+  children,
+  className,
+  layarPenuhMobile = false,
+}: DialogProps) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-overlay backdrop-blur-sm" />
+        <DialogPrimitive.Overlay className="overlay-animasi fixed inset-0 z-50 bg-overlay backdrop-blur-sm" />
         <DialogPrimitive.Content
           aria-describedby={deskripsi ? undefined : undefined}
           className={cn(
-            'fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] w-full flex-col rounded-t-xl border border-line bg-surface shadow-md sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl',
+            'dialog-animasi lembar-bawah-animasi fixed z-50 flex w-full flex-col border border-line bg-surface shadow-md sm:inset-auto sm:top-1/2 sm:left-1/2 sm:max-h-[90dvh] sm:max-w-lg sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl',
+            layarPenuhMobile
+              ? 'inset-0 max-h-dvh rounded-none border-0 sm:border'
+              : 'inset-x-0 bottom-0 max-h-[92dvh] rounded-t-2xl pb-[env(safe-area-inset-bottom,0px)] sm:pb-0',
             className,
           )}
         >

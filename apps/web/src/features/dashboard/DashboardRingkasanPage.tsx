@@ -129,15 +129,23 @@ function BarisKpi({ d }: { d: DashboardRingkasan | undefined }) {
   }
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <StatCard label="Guru aktif" nilai={angka(d.kpi.guru_aktif)} icon={UserRound} />
-      <StatCard label="Siswa aktif" nilai={angka(d.kpi.siswa_aktif)} icon={GraduationCap} />
-      <StatCard label="Rombel" nilai={angka(d.kpi.rombel)} keterangan="kelas" icon={School} />
-      <StatCard
-        label="Catatan hari ini"
-        nilai={angka(d.kpi.catatan_hari_ini)}
-        keterangan="kehadiran guru"
-        icon={ClipboardCheck}
-      />
+      <div className="kartu-stagger" style={{ ['--stagger-i' as string]: 0 }}>
+        <StatCard label="Guru aktif" nilai={angka(d.kpi.guru_aktif)} icon={UserRound} />
+      </div>
+      <div className="kartu-stagger" style={{ ['--stagger-i' as string]: 1 }}>
+        <StatCard label="Siswa aktif" nilai={angka(d.kpi.siswa_aktif)} icon={GraduationCap} />
+      </div>
+      <div className="kartu-stagger" style={{ ['--stagger-i' as string]: 2 }}>
+        <StatCard label="Rombel" nilai={angka(d.kpi.rombel)} keterangan="kelas" icon={School} />
+      </div>
+      <div className="kartu-stagger" style={{ ['--stagger-i' as string]: 3 }}>
+        <StatCard
+          label="Catatan hari ini"
+          nilai={angka(d.kpi.catatan_hari_ini)}
+          keterangan="kehadiran guru"
+          icon={ClipboardCheck}
+        />
+      </div>
     </div>
   );
 }

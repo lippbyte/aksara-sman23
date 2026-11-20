@@ -47,83 +47,88 @@ export function LaporanSiswaPage() {
       ? `${f.nilai.tanggal_dari ? tanggalPendek(f.nilai.tanggal_dari) : 'awal'} – ${f.nilai.tanggal_sampai ? tanggalPendek(f.nilai.tanggal_sampai) : 'sekarang'}`
       : 'Semua tanggal';
 
+  const tombolEkspor = rentangSalah ? (
+    <Button size="touch" variant="secondary" disabled>
+      <Download aria-hidden="true" />
+      Ekspor CSV
+    </Button>
+  ) : (
+    <Button asChild size="touch" variant="secondary">
+      <a href={urlEksporLaporanSiswa(f.nilai)} download>
+        <Download aria-hidden="true" />
+        Ekspor CSV
+      </a>
+    </Button>
+  );
+
   return (
     <div>
-      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <FilterBar className="mb-0 flex-1" onReset={f.reset} adaFilter={f.adaFilter}>
-          <FilterItem label="Kelas" className="sm:w-32">
-            {(id) => (
-              <Select
-                id={id}
-                value={f.nilai.kelas_id}
-                onChange={(e) => {
-                  f.atur('kelas_id', e.target.value);
-                  f.atur('siswa_id', '');
-                }}
-              >
-                <option value="">Semua</option>
-                {kelas.data?.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.nama_kelas}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FilterItem>
-          <FilterItem label="Siswa" className="sm:w-56">
-            {(id) => (
-              <Select
-                id={id}
-                value={f.nilai.siswa_id}
-                disabled={kelasId === null}
-                onChange={(e) => f.atur('siswa_id', e.target.value)}
-              >
-                <option value="">{kelasId === null ? 'Pilih kelas dulu' : 'Semua'}</option>
-                {siswa.data?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nama_siswa}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FilterItem>
-          <FilterItem label="Dari tanggal">
-            {(id) => (
-              <Input
-                id={id}
-                type="date"
-                value={f.nilai.tanggal_dari}
-                max={f.nilai.tanggal_sampai || undefined}
-                onChange={(e) => f.atur('tanggal_dari', e.target.value)}
-              />
-            )}
-          </FilterItem>
-          <FilterItem label="Sampai tanggal">
-            {(id) => (
-              <Input
-                id={id}
-                type="date"
-                value={f.nilai.tanggal_sampai}
-                min={f.nilai.tanggal_dari || undefined}
-                onChange={(e) => f.atur('tanggal_sampai', e.target.value)}
-              />
-            )}
-          </FilterItem>
-        </FilterBar>
-        {rentangSalah ? (
-          <Button size="touch" variant="secondary" disabled>
-            <Download aria-hidden="true" />
-            Ekspor CSV
-          </Button>
-        ) : (
-          <Button asChild size="touch" variant="secondary">
-            <a href={urlEksporLaporanSiswa(f.nilai)} download>
-              <Download aria-hidden="true" />
-              Ekspor CSV
-            </a>
-          </Button>
-        )}
-      </div>
+      <FilterBar
+        lembarMobile
+        onReset={f.reset}
+        adaFilter={f.adaFilter}
+        jumlahAktif={f.jumlahAktif}
+        aksi={tombolEkspor}
+      >
+        <FilterItem label="Kelas" className="sm:w-32">
+          {(id) => (
+            <Select
+              id={id}
+              value={f.nilai.kelas_id}
+              onChange={(e) => {
+                f.atur('kelas_id', e.target.value);
+                f.atur('siswa_id', '');
+              }}
+            >
+              <option value="">Semua</option>
+              {kelas.data?.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.nama_kelas}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FilterItem>
+        <FilterItem label="Siswa" className="sm:w-48">
+          {(id) => (
+            <Select
+              id={id}
+              value={f.nilai.siswa_id}
+              disabled={kelasId === null}
+              onChange={(e) => f.atur('siswa_id', e.target.value)}
+            >
+              <option value="">{kelasId === null ? 'Pilih kelas dulu' : 'Semua'}</option>
+              {siswa.data?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nama_siswa}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FilterItem>
+        <FilterItem label="Dari tanggal" className="sm:w-40">
+          {(id) => (
+            <Input
+              id={id}
+              type="date"
+              value={f.nilai.tanggal_dari}
+              max={f.nilai.tanggal_sampai || undefined}
+              onChange={(e) => f.atur('tanggal_dari', e.target.value)}
+            />
+          )}
+        </FilterItem>
+        <FilterItem label="Sampai tanggal" className="sm:w-40">
+          {(id) => (
+            <Input
+              id={id}
+              type="date"
+              value={f.nilai.tanggal_sampai}
+              min={f.nilai.tanggal_dari || undefined}
+              onChange={(e) => f.atur('tanggal_sampai', e.target.value)}
+            />
+          )}
+        </FilterItem>
+      </FilterBar>
 
       <p className="mb-2 text-xs text-ink-subtle">
         Periode: {periode}. Jumlah dihitung dari catatan absensi siswa (per tanggal dan jam ke).

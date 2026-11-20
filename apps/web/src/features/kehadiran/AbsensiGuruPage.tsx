@@ -92,81 +92,84 @@ export function AbsensiGuruPage() {
 
   return (
     <div>
-      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <FilterBar className="mb-0 flex-1" onReset={f.reset} adaFilter={f.adaFilter}>
-          <FilterItem label="Tanggal">
-            {(id) => (
-              <div className="flex gap-1.5">
-                <Input
-                  id={id}
-                  type="date"
-                  value={f.nilai.tanggal}
-                  onChange={(e) => f.atur('tanggal', e.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  size="touch"
-                  onClick={() => f.atur('tanggal', hariIni())}
-                  disabled={f.nilai.tanggal === hariIni()}
-                >
-                  Hari ini
-                </Button>
-              </div>
-            )}
-          </FilterItem>
-          {!sekretaris && (
-            <FilterItem label="Kelas" className="sm:w-32">
-              {(id) => (
-                <Select
-                  id={id}
-                  value={f.nilai.kelas_id}
-                  onChange={(e) => f.atur('kelas_id', e.target.value)}
-                >
-                  <option value="">Semua</option>
-                  {kelas.data?.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.nama_kelas}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </FilterItem>
+      <FilterBar
+        lembarMobile
+        onReset={f.reset}
+        adaFilter={f.adaFilter}
+        jumlahAktif={f.jumlahAktif}
+        aksi={tombolCatat}
+      >
+        <FilterItem label="Tanggal" className="sm:w-56">
+          {(id) => (
+            <div className="flex gap-1.5">
+              <Input
+                id={id}
+                type="date"
+                value={f.nilai.tanggal}
+                onChange={(e) => f.atur('tanggal', e.target.value)}
+              />
+              <Button
+                variant="secondary"
+                size="touch"
+                onClick={() => f.atur('tanggal', hariIni())}
+                disabled={f.nilai.tanggal === hariIni()}
+              >
+                Hari ini
+              </Button>
+            </div>
           )}
-          <FilterItem label="Guru">
+        </FilterItem>
+        {!sekretaris && (
+          <FilterItem label="Kelas" className="sm:w-28">
             {(id) => (
               <Select
                 id={id}
-                value={f.nilai.guru_id}
-                onChange={(e) => f.atur('guru_id', e.target.value)}
+                value={f.nilai.kelas_id}
+                onChange={(e) => f.atur('kelas_id', e.target.value)}
               >
                 <option value="">Semua</option>
-                {guru.data?.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.nama_guru}
+                {kelas.data?.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.nama_kelas}
                   </option>
                 ))}
               </Select>
             )}
           </FilterItem>
-          <FilterItem label="Status" className="sm:w-36">
-            {(id) => (
-              <Select
-                id={id}
-                value={f.nilai.status}
-                onChange={(e) => f.atur('status', e.target.value)}
-              >
-                <option value="">Semua</option>
-                {STATUS_KEHADIRAN.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </FilterItem>
-        </FilterBar>
-        {tombolCatat}
-      </div>
+        )}
+        <FilterItem label="Guru" className="sm:w-40">
+          {(id) => (
+            <Select
+              id={id}
+              value={f.nilai.guru_id}
+              onChange={(e) => f.atur('guru_id', e.target.value)}
+            >
+              <option value="">Semua</option>
+              {guru.data?.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.nama_guru}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FilterItem>
+        <FilterItem label="Status" className="sm:w-32">
+          {(id) => (
+            <Select
+              id={id}
+              value={f.nilai.status}
+              onChange={(e) => f.atur('status', e.target.value)}
+            >
+              <option value="">Semua</option>
+              {STATUS_KEHADIRAN.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FilterItem>
+      </FilterBar>
 
       <DataTable
         kolom={kolom}

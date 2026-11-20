@@ -2,12 +2,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   NAMA_HARI,
   sekolahSchema,
+  type JenisLatar,
   type Respons,
   type Sekolah,
   type SekolahInput,
 } from '@sms/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ImageUp, School, Trash2, TriangleAlert } from 'lucide-react';
+import { Image, ImageUp, School, Trash2, TriangleAlert } from 'lucide-react';
 import { useRef } from 'react';
 import { useForm, type Path } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -21,11 +22,19 @@ import { KUNCI_SESI } from '@/lib/auth';
 
 const KUNCI = ['pengaturan', 'sekolah'] as const;
 const UKURAN_LOGO_MAKS = 250 * 1024;
+const UKURAN_LATAR_MAKS = 5 * 1024 * 1024;
+const TIPE_GAMBAR = ['image/png', 'image/jpeg', 'image/webp'];
 
 type NilaiForm = SekolahInput;
 
 function keForm(s: Sekolah): NilaiForm {
-  const { id: _id, logo_url: _logo, ...isi } = s;
+  const {
+    id: _id,
+    logo_url: _logo,
+    login_background_url: _latarMasuk,
+    dashboard_background_url: _latarDash,
+    ...isi
+  } = s;
   return isi;
 }
 
@@ -59,9 +68,37 @@ export function TabSekolah() {
   return <FormSekolah key={sekolah.dataUpdatedAt} sekolah={sekolah.data} />;
 }
 
+function bacaDataUrl(
+  berkas: File,
+  maksByte: number,
+  label: string,
+  onSiap: (dataUrl: string) => void,
+) {
+  if (!TIPE_GAMBAR.includes(berkas.type)) {
+    toast.error(`${label} harus berupa PNG, JPEG, atau WebP.`);
+    return;
+  }
+  if (berkas.size > maksByte) {
+    const maksLabel =
+      maksByte >= 1024 * 1024
+        ? `${Math.round(maksByte / (1024 * 1024))} MB`
+        : `${Math.round(maksByte / 1024)} KB`;
+    toast.error(`Ukuran ${label.toLowerCase()} maksimal ${maksLabel}.`);
+    return;
+  }
+  const pembaca = new FileReader();
+  pembaca.onload = () => {
+    if (typeof pembaca.result === 'string') onSiap(pembaca.result);
+  };
+  pembaca.onerror = () => toast.error(`Berkas ${label.toLowerCase()} tidak dapat dibaca.`);
+  pembaca.readAsDataURL(berkas);
+}
+
 function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
   const queryClient = useQueryClient();
   const inputLogo = useRef<HTMLInputElement>(null);
+  const inputLatarMasuk = useRef<HTMLInputElement>(null);
+  const inputLatarDashboard = useRef<HTMLInputElement>(null);
   const form = useForm<NilaiForm>({
     resolver: zodResolver(sekolahSchema),
     defaultValues: keForm(sekolah),
@@ -71,7 +108,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
 
   const segarkan = (baru: Sekolah) => {
     queryClient.setQueryData(KUNCI, baru);
-    // Nama dan logo sekolah tampil di sidebar.
+    // Nama, logo, dan latar dashboard sekolah tampil di layout & dashboard.
     void queryClient.invalidateQueries({ queryKey: KUNCI_SESI });
   };
 
@@ -110,23 +147,25 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
     onError: (err) => toast.error(pesanGalat(err)),
   });
 
-  function pilihLogo(berkas: File | undefined) {
-    if (!berkas) return;
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(berkas.type)) {
-      toast.error('Logo harus berupa PNG, JPEG, atau WebP.');
-      return;
-    }
-    if (berkas.size > UKURAN_LOGO_MAKS) {
-      toast.error('Ukuran logo maksimal 250 KB.');
-      return;
-    }
-    const pembaca = new FileReader();
-    pembaca.onload = () => {
-      if (typeof pembaca.result === 'string') unggahLogo.mutate(pembaca.result);
-    };
-    pembaca.onerror = () => toast.error('Berkas logo tidak dapat dibaca.');
-    pembaca.readAsDataURL(berkas);
-  }
+  const unggahLatar = useMutation({
+    mutationFn: ({ jenis, dataUrl }: { jenis: JenisLatar; dataUrl: string }) =>
+      api.put<Respons<Sekolah>>(`/settings/sekolah/latar/${jenis}`, { data_url: dataUrl }),
+    onSuccess: (res, { jenis }) => {
+      toast.success(`Gambar latar halaman ${jenis} diperbarui.`);
+      segarkan(res.data);
+    },
+    onError: (err) => toast.error(pesanGalat(err)),
+  });
+
+  const hapusLatar = useMutation({
+    mutationFn: (jenis: JenisLatar) =>
+      api.delete<Respons<Sekolah>>(`/settings/sekolah/latar/${jenis}`),
+    onSuccess: (res, jenis) => {
+      toast.success(`Gambar latar halaman ${jenis} dihapus.`);
+      segarkan(res.data);
+    },
+    onError: (err) => toast.error(pesanGalat(err)),
+  });
 
   function ubahHari(hari: number, dipilih: boolean) {
     const baru = dipilih ? [...hariEfektif, hari] : hariEfektif.filter((h) => h !== hari);
@@ -153,51 +192,178 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
   return (
     <div className="grid max-w-4xl gap-4">
       <Card>
-        <CardHeader judul="Logo sekolah" keterangan="PNG, JPEG, atau WebP, maksimal 250 KB." />
-        <CardBody className="flex flex-wrap items-center gap-4">
-          {sekolah.logo_url ? (
-            <img
-              src={sekolah.logo_url}
-              alt="Logo sekolah saat ini"
-              className="size-16 rounded-lg border border-line object-contain"
+        <CardHeader
+          judul="Logo dan gambar latar sekolah"
+          keterangan="PNG, JPEG, atau WebP. Metadata EXIF (termasuk lokasi) dihapus otomatis; gambar latar diubah ukurannya ke 640/1280/1920 px WebP."
+        />
+        <CardBody className="grid gap-4 md:grid-cols-3">
+          {/* Slot 1: Logo sekolah */}
+          <div className="flex flex-col justify-between gap-3 rounded-lg border border-line-soft bg-app/50 p-3">
+            <div className="flex items-center gap-3">
+              {sekolah.logo_url ? (
+                <img
+                  src={sekolah.logo_url}
+                  alt="Logo sekolah saat ini"
+                  className="size-14 shrink-0 rounded-lg border border-line bg-surface object-contain p-1"
+                />
+              ) : (
+                <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-subtle">
+                  <School className="size-6 text-icon-muted" aria-hidden="true" />
+                </span>
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">Logo sekolah</p>
+                <p className="text-xs text-ink-subtle">Maks. 250 KB</p>
+              </div>
+            </div>
+            <input
+              ref={inputLogo}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              aria-label="Pilih berkas logo"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) bacaDataUrl(f, UKURAN_LOGO_MAKS, 'Logo', (u) => unggahLogo.mutate(u));
+                e.target.value = '';
+              }}
             />
-          ) : (
-            <span className="flex size-16 items-center justify-center rounded-lg bg-subtle">
-              <School className="size-7 text-icon-muted" aria-hidden="true" />
-            </span>
-          )}
-          <input
-            ref={inputLogo}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="sr-only"
-            aria-label="Pilih berkas logo"
-            onChange={(e) => {
-              pilihLogo(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              size="touch"
-              loading={unggahLogo.isPending}
-              onClick={() => inputLogo.current?.click()}
-            >
-              <ImageUp aria-hidden="true" />
-              Unggah logo
-            </Button>
-            {sekolah.logo_url && (
+            <div className="flex flex-wrap gap-2">
               <Button
-                variant="ghost"
-                size="touch"
-                loading={hapusLogo.isPending}
-                onClick={() => hapusLogo.mutate()}
+                variant="secondary"
+                size="sm"
+                loading={unggahLogo.isPending}
+                onClick={() => inputLogo.current?.click()}
               >
-                <Trash2 aria-hidden="true" />
-                Hapus logo
+                <ImageUp aria-hidden="true" />
+                Unggah logo
               </Button>
-            )}
+              {sekolah.logo_url && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={hapusLogo.isPending}
+                  onClick={() => hapusLogo.mutate()}
+                >
+                  <Trash2 aria-hidden="true" />
+                  Hapus
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Slot 2: Latar halaman masuk */}
+          <div className="flex flex-col justify-between gap-3 rounded-lg border border-line-soft bg-app/50 p-3">
+            <div>
+              <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-line bg-subtle">
+                {sekolah.login_background_url ? (
+                  <img
+                    src={`${sekolah.login_background_url}&w=640&fmt=webp`}
+                    alt="Pratinjau latar halaman masuk"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Image className="size-6 text-icon-muted" aria-hidden="true" />
+                )}
+              </div>
+              <p className="text-sm font-medium text-ink">Latar halaman masuk</p>
+              <p className="text-xs text-ink-subtle">Opsional · maks. 5 MB · tampil tanpa login</p>
+            </div>
+            <input
+              ref={inputLatarMasuk}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              aria-label="Pilih gambar latar halaman masuk"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  bacaDataUrl(f, UKURAN_LATAR_MAKS, 'Gambar latar masuk', (dataUrl) =>
+                    unggahLatar.mutate({ jenis: 'masuk', dataUrl }),
+                  );
+                }
+                e.target.value = '';
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={unggahLatar.isPending && unggahLatar.variables?.jenis === 'masuk'}
+                onClick={() => inputLatarMasuk.current?.click()}
+              >
+                <ImageUp aria-hidden="true" />
+                {sekolah.login_background_url ? 'Ganti' : 'Unggah'}
+              </Button>
+              {sekolah.login_background_url && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={hapusLatar.isPending && hapusLatar.variables === 'masuk'}
+                  onClick={() => hapusLatar.mutate('masuk')}
+                >
+                  <Trash2 aria-hidden="true" />
+                  Hapus
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Slot 3: Latar dashboard */}
+          <div className="flex flex-col justify-between gap-3 rounded-lg border border-line-soft bg-app/50 p-3">
+            <div>
+              <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-line bg-subtle">
+                {sekolah.dashboard_background_url ? (
+                  <img
+                    src={`${sekolah.dashboard_background_url}&w=640&fmt=webp`}
+                    alt="Pratinjau latar dashboard"
+                    className="h-full w-full object-cover grayscale"
+                  />
+                ) : (
+                  <Image className="size-6 text-icon-muted" aria-hidden="true" />
+                )}
+              </div>
+              <p className="text-sm font-medium text-ink">Latar dashboard</p>
+              <p className="text-xs text-ink-subtle">Opsional · maks. 5 MB · khusus sesi masuk</p>
+            </div>
+            <input
+              ref={inputLatarDashboard}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              aria-label="Pilih gambar latar dashboard"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  bacaDataUrl(f, UKURAN_LATAR_MAKS, 'Gambar latar dashboard', (dataUrl) =>
+                    unggahLatar.mutate({ jenis: 'dashboard', dataUrl }),
+                  );
+                }
+                e.target.value = '';
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={unggahLatar.isPending && unggahLatar.variables?.jenis === 'dashboard'}
+                onClick={() => inputLatarDashboard.current?.click()}
+              >
+                <ImageUp aria-hidden="true" />
+                {sekolah.dashboard_background_url ? 'Ganti' : 'Unggah'}
+              </Button>
+              {sekolah.dashboard_background_url && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  loading={hapusLatar.isPending && hapusLatar.variables === 'dashboard'}
+                  onClick={() => hapusLatar.mutate('dashboard')}
+                >
+                  <Trash2 aria-hidden="true" />
+                  Hapus
+                </Button>
+              )}
+            </div>
           </div>
         </CardBody>
       </Card>
@@ -309,12 +475,16 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
           </CardBody>
         </Card>
 
-        <p className="text-xs text-ink-subtle">
-          Setelah mengubah tanggal awal pekan atau hari efektif, sinkronkan ulang rekap kehadiran
-          agar angka rekap mengikuti pengaturan baru.
-        </p>
-        <div>
-          <Button type="submit" size="touch" loading={simpan.isPending}>
+        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface/95 px-4 py-3 backdrop-blur-sm lg:static lg:border-0 lg:bg-transparent lg:p-0">
+          <p className="text-xs text-ink-subtle">
+            Setelah mengubah tanggal awal pekan atau hari efektif, sinkronkan ulang rekap kehadiran.
+          </p>
+          <Button
+            type="submit"
+            size="touch"
+            className="w-full sm:w-auto"
+            loading={simpan.isPending}
+          >
             Simpan pengaturan
           </Button>
         </div>

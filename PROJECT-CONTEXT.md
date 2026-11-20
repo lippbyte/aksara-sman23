@@ -29,6 +29,7 @@ Aplikasi web untuk **mencatat dan merekap kehadiran guru di kelas dan kehadiran 
 - Absensi dengan **ID card siswa** (masih dalam pengembangan; hanya disiapkan titik perluasannya).
 - Multi-sekolah dalam satu instalasi (satu instalasi = satu sekolah).
 - Aplikasi mobile native, notifikasi WhatsApp, integrasi dengan sistem pemerintah.
+- Landing page publik **terpisah** dari aplikasi (di-host terpisah, tidak berbagi sesi atau basis data).
 - Fitur tambahan yang masih didiskusikan tim. Jangan menambah fitur yang tidak ada di dokumen ini.
 
 ## 3. Pengguna dan peran
@@ -73,7 +74,7 @@ Nama tabel dan kolom tetap bahasa Indonesia, `snake_case`, seperti prototype. My
 
 ### Inti
 - **users**: `name`, `email` (unik), `password` (hash), `role` enum(`admin`,`manajemen_guru`,`sekretaris_kelas`,`guru_penilai`), `kelas_id` (nullable FK → kelas; wajib bila role `sekretaris_kelas`), `is_active` (baru).
-- **sekolah_settings** *(baru, satu baris)*: `nama_sekolah`, `logo_path`, `tahun_ajaran`, `tanggal_awal_pekan` (pengganti konstanta `2026-01-12`), `hari_efektif` (default Senin–Jumat), bobot penilaian (bagian 6.4), `jendela_penilaian_hari` (default 3).
+- **sekolah_settings** *(baru, satu baris)*: `nama_sekolah`, `logo_path`, `login_background_path` (nullable), `dashboard_background_path` (nullable), `tahun_ajaran`, `tanggal_awal_pekan` (pengganti konstanta `2026-01-12`), `hari_efektif` (default Senin–Jumat), bobot penilaian (bagian 6.4), `jendela_penilaian_hari` (default 3). Berkas gambar berada di `UPLOAD_DIR` (di luar git).
 - **kelas**: `nama_kelas` (unik, mis. "X-1").
 - **mgmp**: `nama_mapel` (unik), `deskripsi`.
 - **guru**: `kode_guru` (unik), `nip` (nullable, unik), `nama_guru`, `mata_pelajaran` *(perbaiki: prototype tidak konsisten antara `nama_pelajaran` dan `mata_pelajaran`)*, `jabatan`, `mgmp_id` (nullable FK), `status` enum(`aktif`,`tidak_aktif`).
@@ -172,6 +173,8 @@ Semua skor 0–100, dua desimal. Pembulatan hanya pada nilai akhir yang disimpan
 
 **Ekspor:** prototype mengekspor CSV. Pertahankan CSV (UTF-8 dengan BOM agar terbaca Excel); XLSX boleh ditambahkan nanti.
 
+**Impor data master oleh admin (wajib sebelum data nyata, Fase 14):** impor guru, siswa, dan jadwal mengajar (CSV UTF-8) oleh admin dengan templat kosong, pratinjau validasi, laporan galat per baris, simpan atomik dalam satu transaksi, dan fitur hapus data pilot dengan konfirmasi berlapis.
+
 **Impor kehadiran dari spreadsheet** (fitur prototype `import:kehadiran`): format kolom `Tanggal, Kelas, Hari, Jam, Waktu, Mata Pelajaran, Nama Guru, Status Kehadiran, Status Tugas`; pemetaan `Sudah Ada→Hadir`, `Belum Ada→Tidak Hadir`. Jadikan fitur admin dengan pratinjau sebelum simpan. **Prioritas rendah.**
 
 ## 8. Kelemahan prototype yang wajib diperbaiki
@@ -191,6 +194,7 @@ Semua skor 0–100, dua desimal. Pembulatan hanya pada nilai akhir yang disimpan
 
 - Data siswa adalah **data anak**; penilaian guru **sensitif secara organisasi**.
 - Pengembangan dan demo **hanya dengan seeder data fiktif**. Jangan memakai atau mengimpor CSV dan data dari prototype yang berisi nama asli.
+- **Gerbang sebelum data nyata masuk:** (1) izin tertulis dari sekolah, (2) tinjauan independen dan pengerasan minimal (HTTPS, rahasia baru, cadangan harian + uji pemulihan), (3) data nyata tidak lewat repo, CI, seeder, agen, maupun obrolan AI (masuk hanya lewat fitur impor admin di server tujuan), (4) data seperlunya tanpa alamat/kontak/foto siswa, (5) peluncuran bertahap, (6) gambar spesifik sekolah (foto gedung, logo) tidak masuk repo dan hanya muncul di instalasi sekolah itu dengan izin sekolah.
 - Simpan data seperlunya. Tidak ada foto, alamat, atau kontak siswa pada fase ini.
 - Kata sandi di-hash; sesi lewat cookie httpOnly; validasi semua input; batasi percobaan login.
 - **Dilarang** menulis klaim "aman", "terenkripsi", atau "sesuai UU PDP" di UI, README, atau materi sebelum ada audit dan verifikasi hukum.
@@ -211,9 +215,10 @@ Semua skor 0–100, dua desimal. Pembulatan hanya pada nilai akhir yang disimpan
 
 ## 12. Open items `[PERLU DIKONFIRMASI]`
 
-1. Nama final produk, logo, dan identitas visual produk.
-2. Fitur tambahan dari diskusi tim.
-3. Skor observasi dari modul Performance lama: dibuang atau dipertahankan?
-4. Perlu nilai per penilai (5 atasan) atau cukup rata-rata?
-5. Target hosting (VPS/PaaS untuk Node) dan siapa pengelolanya saat pilot.
-6. Rencana ID card: teknologi pemindai dan perangkat.
+1. Nama final produk, tagline publik, logo, dan identitas visual produk.
+2. Kebutuhan mode gelap pada versi pertama atau ditunda.
+3. Fitur tambahan dari diskusi tim.
+4. Skor observasi dari modul Performance lama: dibuang atau dipertahankan?
+5. Perlu nilai per penilai (5 atasan) atau cukup rata-rata?
+6. Target hosting (VPS/PaaS untuk Node) dan siapa pemilik/pengelola server selama pilot.
+7. Rencana ID card: teknologi pemindai dan perangkat.

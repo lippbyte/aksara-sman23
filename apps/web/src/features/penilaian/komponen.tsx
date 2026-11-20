@@ -40,6 +40,97 @@ export function usePeriodeUrl() {
   return { periode, page, atur, cari: params.get('q') ?? '' };
 }
 
+/**
+ * Panel terpadu periode, aksi (Sinkron/Ekspor), dan info jendela penilaian dalam satu kartu
+ * agar tata letak padat dan tombol sejajar.
+ */
+export function PanelPeriodePenilaian({
+  periode,
+  onUbah,
+  jendela,
+  admin,
+  children,
+  aksi,
+}: {
+  periode: Periode;
+  onUbah: (kunci: 'bulan' | 'tahun', nilai: string) => void;
+  jendela: (JendelaPenilaian & { hari: number }) | undefined;
+  admin: boolean;
+  children?: React.ReactNode;
+  aksi?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-3 overflow-hidden rounded-xl border border-line bg-surface">
+      <div
+        role="search"
+        aria-label="Filter periode penilaian"
+        className="flex flex-col gap-3 p-3 sm:flex-row sm:flex-wrap sm:items-end"
+      >
+        <FilterItem label="Bulan" className="sm:w-40">
+          {(id) => (
+            <Select id={id} value={periode.bulan} onChange={(e) => onUbah('bulan', e.target.value)}>
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  {namaBulan(i + 1)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </FilterItem>
+        <FilterItem label="Tahun" className="sm:w-28">
+          {(id) => (
+            <Input
+              id={id}
+              type="number"
+              inputMode="numeric"
+              min={2000}
+              max={2100}
+              value={periode.tahun}
+              onChange={(e) => onUbah('tahun', e.target.value)}
+            />
+          )}
+        </FilterItem>
+        {children}
+        {aksi && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{aksi}</div>}
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-line-soft bg-app/60 px-3.5 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2.5">
+          <CalendarClock className="mt-0.5 size-4 shrink-0 text-icon-muted" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-ink">
+              Jendela penilaian {namaBulan(periode.bulan)} {periode.tahun}
+              {jendela ? (
+                <span className="font-normal text-ink-muted">
+                  {' · '}Dibuka {tanggalRingkas(jendela.buka)} – {tanggalPanjang(jendela.tutup)} (
+                  {jendela.hari} hari terakhir bulan).
+                  {!jendela.terbuka &&
+                    (admin
+                      ? ' Sebagai admin, Anda tetap dapat mengisi; tindakan itu tercatat di log aktivitas.'
+                      : ' Pengisian nilai hanya dapat dilakukan saat jendela terbuka.')}
+                </span>
+              ) : (
+                <span className="font-normal text-ink-subtle"> · Memuat…</span>
+              )}
+            </p>
+            <p className="mt-0.5 flex items-center gap-1 text-xs text-ink-subtle">
+              <Info className="size-3.5 shrink-0" aria-hidden="true" />
+              Aspek dan bobot mengikuti ketentuan sekolah.
+            </p>
+          </div>
+        </div>
+        {jendela && (
+          <StatusBadge
+            status={jendela.terbuka ? 'Terbuka' : 'Tertutup'}
+            nada={jendela.terbuka ? 'hadir' : 'netral'}
+            className={cn('shrink-0 self-start sm:self-center')}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PilihPeriode({
   periode,
   onUbah,

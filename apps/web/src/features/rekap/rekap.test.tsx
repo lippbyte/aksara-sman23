@@ -2,6 +2,7 @@ import type { PekanTersedia, Rekap } from '@sms/shared';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { nadaPersentase, ProgressBar } from '@/components/ProgressBar';
+import { Pagination } from '@/components/DataTable';
 import { pasangApiTiruan, tampilkanApp } from '@/test/bantuan';
 
 afterEach(() => {
@@ -28,6 +29,21 @@ describe('ProgressBar', () => {
     const bar = screen.getByRole('progressbar', { name: 'Kehadiran Guru Contoh' });
     expect(bar).toHaveAttribute('aria-valuenow', '87.5');
     expect(screen.getByText('87,50%')).toBeInTheDocument();
+  });
+});
+
+describe('Pagination jump input', () => {
+  it('loncat ke halaman yang diketik dan membatasi ke rentang halaman sah', () => {
+    const onUbah = vi.fn();
+    render(<Pagination page={1} pageSize={20} total={180} onUbah={onUbah} />);
+    const input = screen.getByLabelText('Loncat ke halaman');
+    fireEvent.change(input, { target: { value: '5' } });
+    fireEvent.submit(input.closest('form')!);
+    expect(onUbah).toHaveBeenCalledWith(5);
+
+    fireEvent.change(input, { target: { value: '99' } });
+    fireEvent.submit(input.closest('form')!);
+    expect(onUbah).toHaveBeenCalledWith(9);
   });
 });
 

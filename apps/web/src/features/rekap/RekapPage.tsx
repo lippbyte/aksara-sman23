@@ -34,14 +34,7 @@ import {
   useUbahRekap,
 } from './api';
 
-const KUNCI_FILTER = [
-  'pekan',
-  'guru_id',
-  'mapel',
-  'kelas_id',
-  'tanggal_dari',
-  'tanggal_sampai',
-] as const;
+const KUNCI_FILTER = ['pekan', 'guru_id', 'mapel', 'kelas_id'] as const;
 const SEMUA_PEKAN = 'semua';
 
 const kunciPekan = (p: { tahun: number; minggu_ke: number }) => `${p.tahun}-${p.minggu_ke}`;
@@ -67,8 +60,6 @@ export function RekapPage() {
     guru_id: f.nilai.guru_id,
     mapel: f.nilai.mapel,
     kelas_id: f.nilai.kelas_id,
-    tanggal_dari: f.nilai.tanggal_dari,
-    tanggal_sampai: f.nilai.tanggal_sampai,
   };
   const siap = semuaPekan || pekan !== undefined;
   const daftar = useDaftarRekap({ ...filter, page: f.page, pageSize: 20 }, siap);
@@ -161,15 +152,36 @@ export function RekapPage() {
     [semuaPekan],
   );
 
-  const rentangSalah =
-    f.nilai.tanggal_dari !== '' &&
-    f.nilai.tanggal_sampai !== '' &&
-    f.nilai.tanggal_dari > f.nilai.tanggal_sampai;
+  const aksiBar = (
+    <>
+      <Button
+        size="touch"
+        disabled={!pekan || sinkron.isPending}
+        loading={sinkron.isPending}
+        onClick={() => setKonfirmasiSinkron(true)}
+      >
+        <RefreshCw aria-hidden="true" />
+        Sinkronkan rekap
+      </Button>
+      <Button asChild size="touch" variant="secondary">
+        <a href={urlEksporRekap(filter)} download>
+          <Download aria-hidden="true" />
+          Ekspor CSV
+        </a>
+      </Button>
+    </>
+  );
 
   return (
     <div>
-      <FilterBar onReset={f.reset} adaFilter={f.adaFilter}>
-        <FilterItem label="Pekan" className="sm:w-64">
+      <FilterBar
+        lembarMobile
+        onReset={f.reset}
+        adaFilter={f.adaFilter}
+        jumlahAktif={f.jumlahAktif}
+        aksi={aksiBar}
+      >
+        <FilterItem label="Pekan" className="sm:w-60">
           {(id) => (
             <Select id={id} value={pilihanPekan} onChange={(e) => f.atur('pekan', e.target.value)}>
               {pekanList.isPending && <option value="">Memuat…</option>}
@@ -184,7 +196,7 @@ export function RekapPage() {
             </Select>
           )}
         </FilterItem>
-        <FilterItem label="Guru">
+        <FilterItem label="Guru" className="sm:w-40">
           {(id) => (
             <Select
               id={id}
@@ -200,7 +212,7 @@ export function RekapPage() {
             </Select>
           )}
         </FilterItem>
-        <FilterItem label="Mapel">
+        <FilterItem label="Mapel" className="sm:w-40">
           {(id) => (
             <Select id={id} value={f.nilai.mapel} onChange={(e) => f.atur('mapel', e.target.value)}>
               <option value="">Semua</option>
@@ -228,61 +240,13 @@ export function RekapPage() {
             </Select>
           )}
         </FilterItem>
-        <FilterItem label="Dari tanggal">
-          {(id) => (
-            <Input
-              id={id}
-              type="date"
-              value={f.nilai.tanggal_dari}
-              max={f.nilai.tanggal_sampai || undefined}
-              onChange={(e) => f.atur('tanggal_dari', e.target.value)}
-            />
-          )}
-        </FilterItem>
-        <FilterItem label="Sampai tanggal">
-          {(id) => (
-            <Input
-              id={id}
-              type="date"
-              value={f.nilai.tanggal_sampai}
-              min={f.nilai.tanggal_dari || undefined}
-              onChange={(e) => f.atur('tanggal_sampai', e.target.value)}
-            />
-          )}
-        </FilterItem>
       </FilterBar>
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-ink-subtle">
-          {pekan
-            ? `${label(pekan)} · ${angka(pekan.jumlah_rekap)} guru terekap. Jam wajib hanya menghitung hari efektif; persentase paling tinggi 100%.`
-            : 'Jam wajib hanya menghitung hari efektif; persentase paling tinggi 100%.'}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="touch"
-            disabled={!pekan || sinkron.isPending}
-            loading={sinkron.isPending}
-            onClick={() => setKonfirmasiSinkron(true)}
-          >
-            <RefreshCw aria-hidden="true" />
-            Sinkronkan rekap
-          </Button>
-          {rentangSalah ? (
-            <Button size="touch" variant="secondary" disabled>
-              <Download aria-hidden="true" />
-              Ekspor CSV
-            </Button>
-          ) : (
-            <Button asChild size="touch" variant="secondary">
-              <a href={urlEksporRekap(filter)} download>
-                <Download aria-hidden="true" />
-                Ekspor CSV
-              </a>
-            </Button>
-          )}
-        </div>
-      </div>
+      <p className="mb-3 text-xs text-ink-subtle">
+        {pekan
+          ? `${label(pekan)} · ${angka(pekan.jumlah_rekap)} guru terekap. Jam wajib hanya menghitung hari efektif; persentase paling tinggi 100%.`
+          : 'Jam wajib hanya menghitung hari efektif; persentase paling tinggi 100%.'}
+      </p>
 
       <DataTable
         kolom={kolom}
@@ -290,13 +254,11 @@ export function RekapPage() {
         idBaris={(r) => r.id}
         memuat={daftar.isFetching || pekanList.isPending}
         galat={
-          rentangSalah
-            ? 'Tanggal akhir tidak boleh sebelum tanggal awal.'
-            : daftar.isError
-              ? pesanGalat(daftar.error)
-              : pekanList.isError
-                ? pesanGalat(pekanList.error)
-                : null
+          daftar.isError
+            ? pesanGalat(daftar.error)
+            : pekanList.isError
+              ? pesanGalat(pekanList.error)
+              : null
         }
         onCobaLagi={() => void (pekanList.isError ? pekanList.refetch() : daftar.refetch())}
         keterangan="Rekap kehadiran guru per pekan"
@@ -311,7 +273,7 @@ export function RekapPage() {
           ),
         }}
       />
-      {daftar.data && !rentangSalah && (
+      {daftar.data && (
         <Pagination
           page={daftar.data.meta.page}
           pageSize={daftar.data.meta.pageSize}

@@ -45,7 +45,12 @@ export function pasangApiTiruan(role: Role | null, penjawab?: Penjawab) {
       }
       const sesi: SesiSaya = {
         user: penggunaUji(role),
-        sekolah: { nama_sekolah: 'SMA Contoh Fiktif', logo_url: null, tahun_ajaran: '2026/2027' },
+        sekolah: {
+          nama_sekolah: 'SMA Contoh Fiktif',
+          logo_url: null,
+          dashboard_background_url: null,
+          tahun_ajaran: '2026/2027',
+        },
       };
       return jawab(200, { data: sesi });
     }

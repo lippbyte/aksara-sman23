@@ -45,6 +45,15 @@
   --status-sakit-chart: #0ea5e9; /* sky-500 */
   --status-netral-text: #334155; /* slate-700 */
   --status-netral-bg: #f1f5f9; /* slate-100 */
+
+  /* Gerak halus (DESIGN §11.4) */
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Tinggi bar navigasi bawah mobile */
+  --tinggi-bar-bawah: calc(3.5rem + env(safe-area-inset-bottom, 0px));
 }
 
 @theme inline {

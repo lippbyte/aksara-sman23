@@ -1,8 +1,9 @@
-import { RotateCcw } from 'lucide-react';
-import { useCallback, useId, useMemo, type ReactNode } from 'react';
+import { RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
+import { Dialog, DialogAksi } from './ui/dialog';
 
 /**
  * Nilai filter disimpan di URL query (DESIGN §6 FilterBar), sehingga bisa dibagikan,
@@ -62,27 +63,37 @@ export function useFilterUrl<K extends string>(kunci: readonly K[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setParams]);
 
-  const adaFilter = kunci.some((k) => nilai[k] !== '');
-  return { nilai, atur, page, aturPage, reset, adaFilter };
+  const jumlahAktif = kunci.filter((k) => nilai[k] !== '').length;
+  const adaFilter = jumlahAktif > 0;
+  return { nilai, atur, page, aturPage, reset, adaFilter, jumlahAktif };
 }
 
 interface FilterBarProps {
   children: ReactNode;
   onReset?: () => void;
   adaFilter?: boolean;
+  /** Jumlah filter aktif untuk lencana tombol Filter di mobile. */
+  jumlahAktif?: number;
+  /** Tombol aksi sejajar kanan di dalam baris filter (mis. Ekspor CSV, Tambah, Sinkron). */
+  aksi?: ReactNode;
+  /** Di mobile (<768 px), pindahkan isian filter ke lembar bawah (DESIGN §11.5). */
+  lembarMobile?: boolean;
   className?: string;
 }
 
-export function FilterBar({ children, onReset, adaFilter = true, className }: FilterBarProps) {
-  return (
-    <div
-      role="search"
-      aria-label="Filter"
-      className={cn(
-        'mb-3 flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:flex-wrap sm:items-end',
-        className,
-      )}
-    >
+export function FilterBar({
+  children,
+  onReset,
+  adaFilter = true,
+  jumlahAktif,
+  aksi,
+  lembarMobile = false,
+  className,
+}: FilterBarProps) {
+  const [lembarBuka, setLembarBuka] = useState(false);
+
+  const isiKontrol = (
+    <>
       {children}
       {onReset && (
         <Button variant="ghost" size="touch" onClick={onReset} disabled={!adaFilter}>
@@ -90,7 +101,86 @@ export function FilterBar({ children, onReset, adaFilter = true, className }: Fi
           Reset
         </Button>
       )}
-    </div>
+    </>
+  );
+
+  if (!lembarMobile) {
+    return (
+      <div
+        role="search"
+        aria-label="Filter"
+        className={cn(
+          'mb-3 flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:flex-wrap sm:items-end',
+          className,
+        )}
+      >
+        {isiKontrol}
+        {aksi && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{aksi}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div
+        className={cn(
+          'mb-3 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-3',
+          className,
+        )}
+      >
+        {/* Mobile (<768 px): tombol buka lembar bawah filter */}
+        <div className="flex items-center md:hidden">
+          <Button
+            variant="secondary"
+            size="touch"
+            onClick={() => setLembarBuka(true)}
+            aria-expanded={lembarBuka}
+          >
+            <SlidersHorizontal aria-hidden="true" />
+            Filter
+            {typeof jumlahAktif === 'number' && jumlahAktif > 0 && (
+              <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-2xs font-semibold text-accent tabular-nums">
+                {jumlahAktif}
+              </span>
+            )}
+          </Button>
+        </div>
+
+        {/* Desktop & tablet (>=768 px): baris filter sebaris */}
+        <div role="search" aria-label="Filter" className="hidden flex-wrap items-end gap-3 md:flex">
+          {isiKontrol}
+        </div>
+
+        {/* Aksi dirender satu kali, sejajar kanan di mobile maupun desktop */}
+        {aksi && <div className="ml-auto flex flex-wrap items-center gap-2">{aksi}</div>}
+      </div>
+
+      {/* Lembar bawah filter hanya dirender saat terbuka agar label tidak ganda di DOM */}
+      {lembarBuka && (
+        <Dialog open onOpenChange={setLembarBuka} judul="Filter data">
+          <div className="flex flex-col gap-3">{children}</div>
+          <DialogAksi>
+            {onReset && (
+              <Button
+                variant="secondary"
+                size="touch"
+                disabled={!adaFilter}
+                onClick={() => {
+                  onReset();
+                  setLembarBuka(false);
+                }}
+              >
+                <RotateCcw aria-hidden="true" />
+                Reset
+              </Button>
+            )}
+            <Button size="touch" onClick={() => setLembarBuka(false)}>
+              Terapkan
+            </Button>
+          </DialogAksi>
+        </Dialog>
+      )}
+    </>
   );
 }
 

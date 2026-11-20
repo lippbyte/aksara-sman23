@@ -6,6 +6,13 @@
     font-family: var(--font-sans);
     font-size: 16px;
     -webkit-text-size-adjust: 100%;
+    scroll-padding-bottom: calc(var(--tinggi-bar-bawah) + 1rem);
+  }
+
+  @media (min-width: 1024px) {
+    html {
+      scroll-padding-bottom: 1.5rem;
+    }
   }
 
   body {
@@ -13,7 +20,14 @@
     color: var(--text);
     font-size: 0.875rem; /* dasar UI 14 px */
     line-height: 1.25rem;
+    overflow-wrap: break-word;
     -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 
   /* Fokus selalu terlihat untuk navigasi papan ketik (DESIGN §9). */
@@ -26,15 +40,145 @@
   [role='button']:not([aria-disabled='true']) {
     cursor: pointer;
   }
+}
 
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-      scroll-behavior: auto !important;
+/* ───────────── Gerak halus (DESIGN §11.4) ───────────── */
+
+@keyframes halaman-masuk-spasial {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes halaman-masuk-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.halaman-masuk {
+  animation: halaman-masuk-fade 90ms ease-out both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .halaman-masuk {
+    animation: halaman-masuk-spasial var(--dur-base) var(--ease-out) both;
+  }
+
+  .kartu-stagger {
+    animation: halaman-masuk-spasial var(--dur-slow) var(--ease-out) both;
+    animation-delay: calc(min(var(--stagger-i, 0), 7) * 40ms);
+  }
+
+  .tombol-tekan {
+    transition:
+      transform var(--dur-fast) var(--ease-out),
+      background-color var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out),
+      border-color var(--dur-fast) var(--ease-out);
+  }
+
+  .tombol-tekan:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .progress-isi {
+    transition: width var(--dur-slow) var(--ease-out);
+  }
+}
+
+/* Transisi overlay & dialog dengan @starting-style (cadangan langsung tampil). */
+.overlay-animasi {
+  opacity: 1;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+
+@starting-style {
+  .overlay-animasi {
+    opacity: 0;
+  }
+}
+
+.dialog-animasi {
+  opacity: 1;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+
+@starting-style {
+  .dialog-animasi {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lembar-bawah-animasi {
+    transform: translateY(0);
+  }
+
+  @starting-style {
+    .lembar-bawah-animasi {
+      opacity: 0;
+      transform: translateY(16px);
     }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-animasi,
+  .dialog-animasi,
+  .lembar-bawah-animasi {
+    transition-duration: 90ms;
+    transform: none !important;
+  }
+
+  .kartu-stagger {
+    animation: halaman-masuk-fade 90ms ease-out both;
+    animation-delay: 0ms;
+  }
+}
+
+/* ───────────── Latar halaman masuk & dashboard (DESIGN §11.3) ───────────── */
+
+.pola-latar-bawaan {
+  background-color: var(--bg-app);
+  background-image:
+    radial-gradient(circle at 20% 20%, var(--accent-soft) 0%, transparent 55%),
+    radial-gradient(circle at 80% 80%, var(--border) 0%, transparent 50%);
+}
+
+.kartu-kaca {
+  background-color: var(--bg-surface);
+}
+
+@supports (backdrop-filter: blur(12px)) {
+  .kartu-kaca {
+    background-color: rgb(255 255 255 / 0.92);
+    backdrop-filter: blur(12px);
+  }
+}
+
+.latar-dashboard-pudar {
+  -webkit-mask-image: linear-gradient(to bottom, black 25%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 25%, transparent 100%);
+}
+
+@supports (not (mask-image: linear-gradient(to bottom, black, transparent))) and
+  (not (-webkit-mask-image: linear-gradient(to bottom, black, transparent))) {
+  .latar-dashboard-pudar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, transparent 20%, var(--bg-app) 100%);
+    pointer-events: none;
   }
 }

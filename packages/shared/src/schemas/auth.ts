@@ -53,6 +53,7 @@ export interface PenggunaSesi {
 export interface SekolahRingkas {
   nama_sekolah: string;
   logo_url: string | null;
+  dashboard_background_url: string | null;
   tahun_ajaran: string;
 }
 

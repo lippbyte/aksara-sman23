@@ -8,7 +8,9 @@ import {
   idParamSchema,
   jadwalQuerySchema,
   jadwalSchema,
+  jenisLatarParamSchema,
   kelasSchema,
+  latarGambarSchema,
   logoSchema,
   mgmpSchema,
   resetPasswordSchema,
@@ -94,4 +96,13 @@ export const sekolah = {
     data: await service.sekolah.simpanLogo(body, audit),
   })),
   hapusLogo: validate({}, async ({ audit }) => ({ data: await service.sekolah.hapusLogo(audit) })),
+  simpanLatar: validate(
+    { params: jenisLatarParamSchema, body: latarGambarSchema },
+    async ({ params, body, audit }) => ({
+      data: await service.sekolah.simpanLatar(params.jenis, body, audit),
+    }),
+  ),
+  hapusLatar: validate({ params: jenisLatarParamSchema }, async ({ params, audit }) => ({
+    data: await service.sekolah.hapusLatar(params.jenis, audit),
+  })),
 };

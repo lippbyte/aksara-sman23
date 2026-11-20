@@ -68,3 +68,11 @@ export async function ambilPengaturan(db: Db): Promise<PengaturanSekolah> {
 export function urlLogo(logoPath: string | null): string | null {
   return logoPath ? `/api/v1/sekolah/logo?v=${encodeURIComponent(logoPath)}` : null;
 }
+
+export function urlLatarMasuk(latarPath: string | null): string | null {
+  return latarPath ? `/api/v1/sekolah/latar/masuk?v=${encodeURIComponent(latarPath)}` : null;
+}
+
+export function urlLatarDashboard(latarPath: string | null): string | null {
+  return latarPath ? `/api/v1/sekolah/latar/dashboard?v=${encodeURIComponent(latarPath)}` : null;
+}

@@ -20,10 +20,10 @@ import {
   type Siswa,
 } from '@sms/shared';
 import { useMutation } from '@tanstack/react-query';
-import { KeyRound } from 'lucide-react';
+import { ArrowLeft, ChevronRight, KeyRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useForm, type FieldValues } from 'react-hook-form';
-import { Navigate, NavLink, useParams } from 'react-router';
+import { Link, Navigate, NavLink, useParams } from 'react-router';
 import { toast } from 'sonner';
 import type { z } from 'zod';
 import type { Kolom } from '@/components/DataTable';
@@ -64,34 +64,76 @@ const OPSI_PERAN: Opsi[] = ROLES.map((r) => ({ nilai: r, label: ROLE_LABEL[r] })
 
 export function PengaturanPage() {
   const { tab } = useParams();
-  if (!tab) return <Navigate to="/pengaturan/sekolah" replace />;
-  const aktif = TAB.find((t) => t.id === tab)?.id;
-  if (!aktif) return <Navigate to="/pengaturan/sekolah" replace />;
+  if (tab && !TAB.some((t) => t.id === tab)) return <Navigate to="/pengaturan/sekolah" replace />;
+  const aktif: IdTab | null = TAB.find((t) => t.id === tab)?.id ?? null;
+  const infoAktif = TAB.find((t) => t.id === aktif);
 
   return (
     <div>
+      {/* Desktop & tablet (>=768 px): bar tab horizontal */}
       <nav
         aria-label="Bagian pengaturan"
-        className="mb-4 flex gap-1 overflow-x-auto border-b border-line"
+        className="mb-4 hidden gap-1 overflow-x-auto border-b border-line md:flex"
       >
-        {TAB.map((t) => (
-          <NavLink
-            key={t.id}
-            to={`/pengaturan/${t.id}`}
-            className={({ isActive }) =>
-              cn(
-                '-mb-px flex h-11 shrink-0 items-center border-b-2 px-3 text-sm font-medium transition-colors duration-200 sm:h-10',
-                isActive
+        {TAB.map((t) => {
+          const dipilih = (aktif ?? 'sekolah') === t.id;
+          return (
+            <NavLink
+              key={t.id}
+              to={`/pengaturan/${t.id}`}
+              className={cn(
+                '-mb-px flex h-10 shrink-0 items-center border-b-2 px-3 text-sm font-medium transition-colors duration-200',
+                dipilih
                   ? 'border-accent text-accent'
                   : 'border-transparent text-ink-muted hover:text-ink',
-              )
-            }
-          >
-            {t.label}
-          </NavLink>
-        ))}
+              )}
+            >
+              {t.label}
+            </NavLink>
+          );
+        })}
       </nav>
-      <IsiTab tab={aktif} />
+
+      {/* Mobile (<768 px): daftar bagian pengaturan satu per satu (DESIGN §11.5) */}
+      {!aktif ? (
+        <>
+          <ul
+            aria-label="Daftar bagian pengaturan"
+            className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface md:hidden"
+          >
+            {TAB.map((t) => (
+              <li key={t.id}>
+                <Link
+                  to={`/pengaturan/${t.id}`}
+                  className="flex min-h-12 items-center justify-between px-4 py-3 text-sm font-medium text-ink hover:bg-app"
+                >
+                  <span>{t.label}</span>
+                  <ChevronRight className="size-4 text-icon-muted" aria-hidden="true" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block">
+            <IsiTab tab="sekolah" />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mb-3 flex items-center gap-2 md:hidden">
+            <Link
+              to="/pengaturan"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-accent hover:bg-accent-soft"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Semua pengaturan
+            </Link>
+            {infoAktif && (
+              <span className="text-sm font-semibold text-ink">· {infoAktif.label}</span>
+            )}
+          </div>
+          <IsiTab tab={aktif} />
+        </>
+      )}
     </div>
   );
 }

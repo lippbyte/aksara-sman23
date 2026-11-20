@@ -1,9 +1,9 @@
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { Dialog } from 'radix-ui';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 import { PENGEMBANG, STATUS_PRODUK } from '@/lib/config';
 import { cn } from '@/lib/utils';
+import { BottomNav } from './BottomNav';
 import { Header } from './Header';
 import { SidebarContent } from './Sidebar';
 
@@ -19,7 +19,7 @@ function bacaStatusLipat(): boolean {
 
 export function AppLayout() {
   const [terlipat, setTerlipat] = useState(bacaStatusLipat);
-  const [laciTerbuka, setLaciTerbuka] = useState(false);
+  const { pathname } = useLocation();
 
   const ubahLipat = useCallback(() => {
     setTerlipat((lama) => {
@@ -42,7 +42,7 @@ export function AppLayout() {
         Lewati ke konten
       </a>
 
-      {/* Sidebar desktop */}
+      {/* Sidebar desktop (>=1024 px) */}
       <aside
         className={cn(
           'sticky top-0 z-40 hidden h-dvh shrink-0 border-r border-line bg-surface transition-[width] duration-200 lg:block',
@@ -65,35 +65,23 @@ export function AppLayout() {
         </button>
       </aside>
 
-      {/* Laci ponsel dan tablet (<1024 px) */}
-      <Dialog.Root open={laciTerbuka} onOpenChange={setLaciTerbuka}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-40 bg-overlay backdrop-blur-sm lg:hidden" />
-          <Dialog.Content
-            aria-describedby={undefined}
-            className="fixed inset-y-0 left-0 z-50 w-60 max-w-[85vw] border-r border-line bg-surface shadow-md lg:hidden"
-          >
-            <Dialog.Title className="sr-only">Menu utama</Dialog.Title>
-            <SidebarContent onNavigate={() => setLaciTerbuka(false)} />
-            <Dialog.Close
-              aria-label="Tutup menu"
-              className="absolute top-1.5 right-1.5 flex size-11 items-center justify-center rounded-lg text-ink-muted hover:bg-subtle hover:text-ink"
-            >
-              <X className="size-5" aria-hidden="true" />
-            </Dialog.Close>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
       <div className="flex min-w-0 flex-1 flex-col">
-        <Header onBukaMenu={() => setLaciTerbuka(true)} />
-        <main id="konten" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
-          <Outlet />
+        <Header />
+        <main
+          id="konten"
+          className="relative mx-auto w-full max-w-7xl flex-1 px-4 py-5 sm:px-6 lg:py-6"
+        >
+          <div key={pathname} className="halaman-masuk">
+            <Outlet />
+          </div>
         </main>
-        <footer className="border-t border-line px-4 py-3 text-center text-xs text-ink-subtle sm:px-6">
+        <footer className="border-t border-line px-4 py-3 pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] text-center text-xs text-ink-subtle sm:px-6 lg:pb-3">
           Dikembangkan oleh {PENGEMBANG} · {STATUS_PRODUK}
         </footer>
       </div>
+
+      {/* Bar navigasi bawah mobile (<1024 px) */}
+      <BottomNav />
     </div>
   );
 }

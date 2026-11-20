@@ -1,4 +1,5 @@
 import type { KehadiranKelasHariIni, KelasJamKosong, TitikTren } from '@sms/shared';
+import { useEffect, useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -15,6 +16,24 @@ import {
 import { angka, labelPekan, persen } from '@/lib/format';
 import { KotakTooltip, WARNA } from './ChartCard';
 
+/** Hormati prefers-reduced-motion pada grafik (DESIGN §11.4). */
+function useAnimasiGrafik(): boolean {
+  const [aktif, setAktif] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const ubah = () => setAktif(!mq.matches);
+    mq.addEventListener('change', ubah);
+    return () => mq.removeEventListener('change', ubah);
+  }, []);
+
+  return aktif;
+}
+
 const SUMBU = {
   tick: { fill: WARNA.teksSumbu, fontSize: 11 },
   tickLine: false,
@@ -23,6 +42,7 @@ const SUMBU = {
 
 /** Kehadiran guru hari ini per kelas: bar bertumpuk JP per status. */
 export function GrafikKehadiranKelas({ data }: { data: KehadiranKelasHariIni[] }) {
+  const animasi = useAnimasiGrafik();
   const seri = [
     { kunci: 'Hadir' as const, warna: WARNA.hadir },
     { kunci: 'Mendampingi' as const, warna: WARNA.mendampingi },
@@ -63,7 +83,8 @@ export function GrafikKehadiranKelas({ data }: { data: KehadiranKelasHariIni[] }
             stroke={WARNA.permukaan}
             strokeWidth={2}
             radius={i === seri.length - 1 ? [4, 4, 0, 0] : 0}
-            isAnimationActive={false}
+            isAnimationActive={animasi}
+            animationDuration={320}
           />
         ))}
       </BarChart>
@@ -73,6 +94,7 @@ export function GrafikKehadiranKelas({ data }: { data: KehadiranKelasHariIni[] }
 
 /** Tren persentase kehadiran guru per pekan (satu seri, sumbu Y 0–100). */
 export function GrafikTren({ data }: { data: TitikTren[] }) {
+  const animasi = useAnimasiGrafik();
   return (
     <ResponsiveContainer width="100%" height="100%">
       <LineChart data={data} margin={{ top: 12, right: 16, bottom: 0, left: -16 }}>
@@ -114,7 +136,8 @@ export function GrafikTren({ data }: { data: TitikTren[] }) {
           connectNulls={false}
           dot={{ r: 4, fill: WARNA.aksen, stroke: WARNA.permukaan, strokeWidth: 2 }}
           activeDot={{ r: 6, fill: WARNA.aksen, stroke: WARNA.permukaan, strokeWidth: 2 }}
-          isAnimationActive={false}
+          isAnimationActive={animasi}
+          animationDuration={320}
         />
       </LineChart>
     </ResponsiveContainer>
@@ -129,6 +152,7 @@ export function GrafikJamKosong({
   data: KelasJamKosong[];
   onPilih: (kelasId: number) => void;
 }) {
+  const animasi = useAnimasiGrafik();
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
@@ -161,7 +185,8 @@ export function GrafikJamKosong({
           radius={[0, 4, 4, 0]}
           className="cursor-pointer"
           onClick={(d: { payload?: KelasJamKosong }) => d.payload && onPilih(d.payload.kelas_id)}
-          isAnimationActive={false}
+          isAnimationActive={animasi}
+          animationDuration={320}
         >
           <LabelList
             dataKey="jp_kosong"

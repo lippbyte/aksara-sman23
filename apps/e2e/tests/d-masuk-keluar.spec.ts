@@ -30,10 +30,14 @@ const PERAN = [
   },
 ] as const;
 
-/** Tombol Keluar ada di sidebar; di ponsel sidebar dibuka lewat "Buka menu". */
+/** Tombol Keluar ada di sidebar (desktop) atau lembar "Lainnya"/"Akun" di bar bawah (mobile). */
 async function keluar(page: Page) {
   const tombol = page.getByRole('button', { name: 'Keluar' });
-  if (!(await tombol.isVisible())) await page.getByRole('button', { name: 'Buka menu' }).click();
+  if (!(await tombol.isVisible())) {
+    const barBawah = page.getByRole('navigation', { name: 'Navigasi utama' });
+    const pemicu = barBawah.getByRole('button', { name: /^(Lainnya|Akun)$/ });
+    await pemicu.click();
+  }
   await tombol.click();
 }
 

@@ -5,13 +5,16 @@ import type {
   Akun,
   AkunBuatInput,
   AkunUbahInput,
+  FormatLatar,
   Guru,
   GuruInput,
   Halaman,
   Jadwal,
   JadwalInput,
+  JenisLatar,
   Kelas,
   KelasInput,
+  LatarGambarInput,
   LogoInput,
   Mgmp,
   MgmpInput,
@@ -20,8 +23,10 @@ import type {
   SekolahInput,
   Siswa,
   SiswaInput,
+  UkuranLatar,
 } from '@sms/shared';
-import { NAMA_HARI } from '@sms/shared';
+import { NAMA_HARI, UKURAN_LATAR } from '@sms/shared';
+import sharp from 'sharp';
 import { DIR_UNGGAH } from '../../env';
 import { catatAudit, type KonteksAudit } from '../../lib/audit';
 import { batalkanCacheDashboard } from '../../lib/cache';
@@ -298,9 +303,17 @@ export const users = {
 // ───────────── Sekolah ─────────────
 
 const POLA_NAMA_LOGO = /^logo-[a-f0-9]{16}\.(png|jpg|webp)$/;
+const POLA_KUNCI_LATAR = /^latar-(masuk|dashboard)-[a-f0-9]{16}$/;
+const UKURAN_LOGO_MAKS_BYTE = 280 * 1024;
+const UKURAN_LATAR_MAKS_BYTE = 5 * 1024 * 1024;
+const ANGGARAN_WEBP_BYTE = 150 * 1024;
 
 export function apakahNamaLogoValid(nama: string): boolean {
   return POLA_NAMA_LOGO.test(nama);
+}
+
+export function apakahKunciLatarValid(kunci: string): boolean {
+  return POLA_KUNCI_LATAR.test(kunci);
 }
 
 /** Jenis berkas ditentukan dari isi (magic bytes), bukan dari klaim pengirim. */
@@ -321,6 +334,40 @@ function kenaliGambar(buf: Buffer): 'png' | 'jpg' | 'webp' | null {
 async function hapusBerkasLogo(nama: string | null): Promise<void> {
   if (!nama || !apakahNamaLogoValid(nama)) return;
   await unlink(join(DIR_UNGGAH, nama)).catch(() => undefined);
+}
+
+async function hapusBerkasLatar(kunci: string | null): Promise<void> {
+  if (!kunci || !apakahKunciLatarValid(kunci)) return;
+  const target: string[] = [];
+  for (const w of UKURAN_LATAR) {
+    target.push(`${kunci}-${w}.webp`, `${kunci}-${w}.jpg`);
+  }
+  await Promise.all(target.map((n) => unlink(join(DIR_UNGGAH, n)).catch(() => undefined)));
+}
+
+/** Ubah ukuran ke WebP sambil menjaga ukuran <= 150 KB (DESIGN §11.3), tanpa EXIF. */
+async function olahWebp(buf: Buffer, lebar: UkuranLatar): Promise<Buffer> {
+  for (const quality of [78, 66, 54, 42]) {
+    const hasil = await sharp(buf)
+      .rotate()
+      .resize({ width: lebar, withoutEnlargement: true })
+      .webp({ quality })
+      .toBuffer();
+    if (hasil.length <= ANGGARAN_WEBP_BYTE || quality === 42) return hasil;
+  }
+  return sharp(buf)
+    .rotate()
+    .resize({ width: lebar, withoutEnlargement: true })
+    .webp({ quality: 42 })
+    .toBuffer();
+}
+
+async function olahJpeg(buf: Buffer, lebar: UkuranLatar): Promise<Buffer> {
+  return sharp(buf)
+    .rotate()
+    .resize({ width: lebar, withoutEnlargement: true })
+    .jpeg({ quality: 76, mozjpeg: true })
+    .toBuffer();
 }
 
 export const sekolah = {
@@ -350,13 +397,32 @@ export const sekolah = {
   async simpanLogo(input: LogoInput, audit: KonteksAudit): Promise<Sekolah> {
     const base64 = input.data_url.slice(input.data_url.indexOf(',') + 1);
     const buf = Buffer.from(base64, 'base64');
+    if (buf.length > UKURAN_LOGO_MAKS_BYTE) {
+      throw badRequest('Ukuran logo maksimal 280 KB.');
+    }
     const jenis = kenaliGambar(buf);
     if (!jenis) throw badRequest('Berkas logo bukan gambar PNG, JPEG, atau WebP yang valid.');
 
+    // Olah ulang dengan sharp agar EXIF (termasuk GPS) terbuang dan dimensi aman.
+    let bersih: Buffer;
+    try {
+      const pipa = sharp(buf)
+        .rotate()
+        .resize({ width: 512, height: 512, fit: 'inside', withoutEnlargement: true });
+      bersih =
+        jenis === 'png'
+          ? await pipa.png().toBuffer()
+          : jenis === 'jpg'
+            ? await pipa.jpeg({ quality: 85 }).toBuffer()
+            : await pipa.webp({ quality: 85 }).toBuffer();
+    } catch {
+      throw badRequest('Berkas logo rusak atau tidak dapat diproses.');
+    }
+
     const lama = await repo.sekolah.ambilLogoPath();
-    const nama = `logo-${createHash('sha256').update(buf).digest('hex').slice(0, 16)}.${jenis}`;
+    const nama = `logo-${createHash('sha256').update(bersih).digest('hex').slice(0, 16)}.${jenis}`;
     await mkdir(DIR_UNGGAH, { recursive: true });
-    await writeFile(join(DIR_UNGGAH, nama), buf);
+    await writeFile(join(DIR_UNGGAH, nama), bersih);
 
     await prisma.$transaction(async (tx) => {
       if (!(await repo.sekolah.ambil(tx))) throw notFound('Pengaturan sekolah belum diisi.');
@@ -391,5 +457,78 @@ export const sekolah = {
   async berkasLogo(): Promise<string | null> {
     const nama = await repo.sekolah.ambilLogoPath();
     return nama && apakahNamaLogoValid(nama) ? nama : null;
+  },
+
+  async simpanLatar(
+    jenis: JenisLatar,
+    input: LatarGambarInput,
+    audit: KonteksAudit,
+  ): Promise<Sekolah> {
+    const base64 = input.data_url.slice(input.data_url.indexOf(',') + 1);
+    const buf = Buffer.from(base64, 'base64');
+    if (buf.length > UKURAN_LATAR_MAKS_BYTE) {
+      throw badRequest('Ukuran gambar latar maksimal 5 MB.');
+    }
+    if (!kenaliGambar(buf)) {
+      throw badRequest('Berkas gambar latar bukan PNG, JPEG, atau WebP yang valid.');
+    }
+
+    const varian: { nama: string; isi: Buffer }[] = [];
+    const hash = createHash('sha256').update(buf).digest('hex').slice(0, 16);
+    const kunci = `latar-${jenis}-${hash}`;
+
+    try {
+      for (const w of UKURAN_LATAR) {
+        const [webp, jpg] = await Promise.all([olahWebp(buf, w), olahJpeg(buf, w)]);
+        varian.push({ nama: `${kunci}-${w}.webp`, isi: webp });
+        varian.push({ nama: `${kunci}-${w}.jpg`, isi: jpg });
+      }
+    } catch {
+      throw badRequest('Berkas gambar latar rusak atau tidak dapat diproses.');
+    }
+
+    const lama = await repo.sekolah.ambilLatarPath(jenis);
+    await mkdir(DIR_UNGGAH, { recursive: true });
+    await Promise.all(varian.map((v) => writeFile(join(DIR_UNGGAH, v.nama), v.isi)));
+
+    await prisma.$transaction(async (tx) => {
+      if (!(await repo.sekolah.ambil(tx))) throw notFound('Pengaturan sekolah belum diisi.');
+      await repo.sekolah.simpanLatarPath(tx, jenis, kunci);
+      await catatAudit(tx, audit, {
+        module: 'Settings',
+        aktivitas: jenis === 'masuk' ? 'UPDATE_LATAR_MASUK' : 'UPDATE_LATAR_DASHBOARD',
+        entity_type: 'sekolah_settings',
+        description: `Mengganti gambar latar halaman ${jenis}.`,
+      });
+    });
+    if (lama !== kunci) await hapusBerkasLatar(lama);
+    return this.ambil();
+  },
+
+  async hapusLatar(jenis: JenisLatar, audit: KonteksAudit): Promise<Sekolah> {
+    const lama = await repo.sekolah.ambilLatarPath(jenis);
+    await prisma.$transaction(async (tx) => {
+      await repo.sekolah.simpanLatarPath(tx, jenis, null);
+      await catatAudit(tx, audit, {
+        module: 'Settings',
+        aktivitas: jenis === 'masuk' ? 'DELETE_LATAR_MASUK' : 'DELETE_LATAR_DASHBOARD',
+        entity_type: 'sekolah_settings',
+        description: `Menghapus gambar latar halaman ${jenis}.`,
+      });
+    });
+    await hapusBerkasLatar(lama);
+    return this.ambil();
+  },
+
+  /** Nama berkas varian gambar latar yang sudah divalidasi, untuk disajikan. */
+  async berkasLatar(
+    jenis: JenisLatar,
+    lebar: UkuranLatar,
+    fmt: FormatLatar,
+  ): Promise<string | null> {
+    const kunci = await repo.sekolah.ambilLatarPath(jenis);
+    if (!kunci || !apakahKunciLatarValid(kunci)) return null;
+    const ext = fmt === 'jpeg' ? 'jpg' : 'webp';
+    return `${kunci}-${lebar}.${ext}`;
   },
 };

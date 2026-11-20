@@ -9,6 +9,7 @@ import type {
   Jadwal,
   JadwalInput,
   JadwalQuery,
+  JenisLatar,
   Kelas,
   KelasInput,
   Mgmp,
@@ -21,7 +22,7 @@ import type {
 } from '@sms/shared';
 import { keAngka, keDate, keNumber, keTanggalISO } from '../../lib/konversi';
 import { prisma, type Db } from '../../lib/prisma';
-import { uraiHariEfektif, urlLogo } from '../../lib/sekolah';
+import { uraiHariEfektif, urlLatarDashboard, urlLatarMasuk, urlLogo } from '../../lib/sekolah';
 
 export interface HasilDaftar<T> {
   rows: T[];
@@ -42,6 +43,8 @@ function keSekolah(s: BarisSekolah): Sekolah {
     id: keNumber(s.id),
     nama_sekolah: s.nama_sekolah,
     logo_url: urlLogo(s.logo_path),
+    login_background_url: urlLatarMasuk(s.login_background_path),
+    dashboard_background_url: urlLatarDashboard(s.dashboard_background_path),
     tahun_ajaran: s.tahun_ajaran,
     tanggal_awal_pekan: keTanggalISO(s.tanggal_awal_pekan),
     hari_efektif: uraiHariEfektif(s.hari_efektif),
@@ -85,6 +88,24 @@ export const sekolah = {
 
   async simpanLogoPath(db: Db, logoPath: string | null): Promise<void> {
     await db.sekolahSettings.updateMany({ data: { logo_path: logoPath } });
+  },
+
+  async ambilLatarPath(jenis: JenisLatar, db: Db = prisma): Promise<string | null> {
+    const s = await db.sekolahSettings.findFirst({
+      orderBy: { id: 'asc' },
+      select: { login_background_path: true, dashboard_background_path: true },
+    });
+    if (!s) return null;
+    return jenis === 'masuk' ? s.login_background_path : s.dashboard_background_path;
+  },
+
+  async simpanLatarPath(db: Db, jenis: JenisLatar, latarPath: string | null): Promise<void> {
+    await db.sekolahSettings.updateMany({
+      data:
+        jenis === 'masuk'
+          ? { login_background_path: latarPath }
+          : { dashboard_background_path: latarPath },
+    });
   },
 };
 

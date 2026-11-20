@@ -4,7 +4,7 @@ import { catatAudit, type KonteksAudit } from '../../lib/audit';
 import { AppError, businessRule, notFound } from '../../lib/errors';
 import { keNumber } from '../../lib/konversi';
 import { prisma } from '../../lib/prisma';
-import { urlLogo } from '../../lib/sekolah';
+import { urlLatarDashboard, urlLogo } from '../../lib/sekolah';
 import { akhiriSesiPengguna } from '../../lib/session';
 import * as repo from './repo';
 
@@ -82,6 +82,7 @@ export async function sekolahRingkas(): Promise<SekolahRingkas | null> {
   return {
     nama_sekolah: s.nama_sekolah,
     logo_url: urlLogo(s.logo_path),
+    dashboard_background_url: urlLatarDashboard(s.dashboard_background_path),
     tahun_ajaran: s.tahun_ajaran,
   };
 }

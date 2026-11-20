@@ -10,5 +10,9 @@ AGENTS.md
 PROJECT-CONTEXT.md
 DESIGN.md
 PROMPT-REBUILD.md
+PROMPT-UIUX-LANDING.md
+.agents
+skills-lock.json
+data_absensi
 apps/e2e/test-results
 apps/e2e/playwright-report

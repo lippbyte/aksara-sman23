@@ -1,4 +1,5 @@
 import { rm } from 'node:fs/promises';
+import sharp from 'sharp';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp, tutupSumberDaya } from '../../app';
@@ -36,6 +37,10 @@ const RUTE_ADMIN: [string, string][] = [
   ['put', `${S}/sekolah`],
   ['put', `${S}/sekolah/logo`],
   ['delete', `${S}/sekolah/logo`],
+  ['put', `${S}/sekolah/latar/masuk`],
+  ['delete', `${S}/sekolah/latar/masuk`],
+  ['put', `${S}/sekolah/latar/dashboard`],
+  ['delete', `${S}/sekolah/latar/dashboard`],
   ...SUMBER.flatMap((s): [string, string][] => [
     ['get', `${S}/${s}`],
     ['post', `${S}/${s}`],
@@ -86,7 +91,13 @@ describe('Pengaturan sekolah', () => {
     expect(awal.body.data.hari_efektif).toEqual([1, 2, 3, 4, 5]);
     expect(awal.body.data.tanggal_awal_pekan).toBe('2026-10-19');
 
-    const { id: _id, logo_url: _logo, ...isi } = awal.body.data;
+    const {
+      id: _id,
+      logo_url: _logo,
+      login_background_url: _lm,
+      dashboard_background_url: _ld,
+      ...isi
+    } = awal.body.data;
     const ubah = await admin.put(`${S}/sekolah`, { ...isi, jendela_penilaian_hari: 5 });
     expect(ubah.status).toBe(200);
     expect(ubah.body.data.jendela_penilaian_hari).toBe(5);
@@ -98,7 +109,13 @@ describe('Pengaturan sekolah', () => {
   });
 
   it('menolak tanggal awal pekan yang bukan Senin dan bobot yang jumlahnya bukan 100', async () => {
-    const { id: _id, logo_url: _logo, ...isi } = (await admin.get(`${S}/sekolah`)).body.data;
+    const {
+      id: _id,
+      logo_url: _logo,
+      login_background_url: _lm,
+      dashboard_background_url: _ld,
+      ...isi
+    } = (await admin.get(`${S}/sekolah`)).body.data;
 
     const bukanSenin = await admin.put(`${S}/sekolah`, {
       ...isi,
@@ -139,6 +156,74 @@ describe('Pengaturan sekolah', () => {
     expect(hapus.status).toBe(200);
     expect(hapus.body.data.logo_url).toBeNull();
     expect((await request(app).get('/api/v1/sekolah/logo')).status).toBe(404);
+  });
+
+  it('gambar latar: tipe salah, ukuran berlebih, EXIF dibuang, akses publik hanya latar masuk', async () => {
+    // 1) Tipe salah (SVG palsu bermask JPEG & tipe non-gambar) → 400.
+    const palsu = `data:image/jpeg;base64,${Buffer.from('<svg onload=alert(1)>').toString('base64')}`;
+    expect((await admin.put(`${S}/sekolah/latar/masuk`, { data_url: palsu })).status).toBe(400);
+    expect(
+      (await admin.put(`${S}/sekolah/latar/masuk`, { data_url: 'data:image/gif;base64,R0lGODlh' }))
+        .status,
+    ).toBe(400);
+    expect((await admin.put(`${S}/sekolah/latar/lain`, { data_url: palsu })).status).toBe(400);
+
+    // 2) Ukuran berlebih (> 5 MB biner) → 400 / 413.
+    const besar = `data:image/jpeg;base64,${Buffer.alloc(5 * 1024 * 1024 + 64, 0xff).toString('base64')}`;
+    const resBesar = await admin.put(`${S}/sekolah/latar/masuk`, { data_url: besar });
+    expect([400, 413]).toContain(resBesar.status);
+
+    // 3) Gambar JPEG dengan metadata EXIF → diunggah, diubah ukuran 640/1280/1920 WebP, EXIF hilang.
+    const jpegDenganExif = await sharp({
+      create: { width: 800, height: 450, channels: 3, background: { r: 79, g: 70, b: 229 } },
+    })
+      .withExif({ IFD0: { ImageDescription: 'Uji EXIF Rahasia' } })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+    const metaAsal = await sharp(jpegDenganExif).metadata();
+    expect(metaAsal.exif).toBeDefined();
+
+    const dataUrl = `data:image/jpeg;base64,${jpegDenganExif.toString('base64')}`;
+    const simpanMasuk = await admin.put(`${S}/sekolah/latar/masuk`, { data_url: dataUrl });
+    expect(simpanMasuk.status).toBe(200);
+    expect(simpanMasuk.body.data.login_background_url).toMatch(
+      /^\/api\/v1\/sekolah\/latar\/masuk\?v=latar-masuk-[a-f0-9]{16}$/,
+    );
+
+    // Latar masuk disajikan tanpa login dalam WebP dan cadangan JPEG, tanpa EXIF.
+    const publikWebp = await request(app).get('/api/v1/sekolah/latar/masuk?w=640&fmt=webp');
+    expect(publikWebp.status).toBe(200);
+    expect(publikWebp.headers['content-type']).toBe('image/webp');
+    const metaWebp = await sharp(publikWebp.body).metadata();
+    expect(metaWebp.width).toBe(640);
+    expect(metaWebp.exif).toBeUndefined();
+
+    const publikJpg = await request(app).get('/api/v1/sekolah/latar/masuk?w=640&fmt=jpeg');
+    expect(publikJpg.status).toBe(200);
+    expect(publikJpg.headers['content-type']).toBe('image/jpeg');
+    const metaJpg = await sharp(publikJpg.body).metadata();
+    expect(metaJpg.exif).toBeUndefined();
+
+    // 4) Latar dashboard: wajib login (tanpa sesi → 401; dengan sesi → 200).
+    const simpanDash = await admin.put(`${S}/sekolah/latar/dashboard`, { data_url: dataUrl });
+    expect(simpanDash.status).toBe(200);
+    expect(simpanDash.body.data.dashboard_background_url).toMatch(
+      /^\/api\/v1\/sekolah\/latar\/dashboard\?v=latar-dashboard-[a-f0-9]{16}$/,
+    );
+    expect((await request(app).get('/api/v1/sekolah/latar/dashboard')).status).toBe(401);
+    const dashDenganSesi = await admin.get('/api/v1/sekolah/latar/dashboard?w=1280&fmt=webp');
+    expect(dashDenganSesi.status).toBe(200);
+    expect(dashDenganSesi.headers['content-type']).toBe('image/webp');
+
+    // 5) Hapus keduanya → 404 saat diakses lagi.
+    expect(
+      (await admin.delete(`${S}/sekolah/latar/masuk`)).body.data.login_background_url,
+    ).toBeNull();
+    expect(
+      (await admin.delete(`${S}/sekolah/latar/dashboard`)).body.data.dashboard_background_url,
+    ).toBeNull();
+    expect((await request(app).get('/api/v1/sekolah/latar/masuk')).status).toBe(404);
+    expect((await admin.get('/api/v1/sekolah/latar/dashboard')).status).toBe(404);
   });
 });
 

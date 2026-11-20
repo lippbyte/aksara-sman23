@@ -27,6 +27,7 @@ const envSchema = z.object({
     (v) => (v === '' ? undefined : v),
     z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'silent']).optional(),
   ),
+  UPLOAD_DIR: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).optional()),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -40,11 +41,12 @@ export const env = parsed.data;
 export const isProduction = env.NODE_ENV === 'production';
 export const isTest = env.NODE_ENV === 'test';
 
-/** Folder berkas unggahan (logo sekolah): apps/api/uploads, tidak di-commit. */
-export const DIR_UNGGAH = resolve(
-  fileURLToPath(new URL('.', import.meta.url)),
-  isTest ? '../uploads-test' : '../uploads',
-);
+/** Folder berkas unggahan (logo & latar sekolah): UPLOAD_DIR atau apps/api/uploads, di luar git. */
+export const DIR_UNGGAH = isTest
+  ? resolve(fileURLToPath(new URL('.', import.meta.url)), '../uploads-test')
+  : env.UPLOAD_DIR
+    ? resolve(env.UPLOAD_DIR)
+    : resolve(fileURLToPath(new URL('.', import.meta.url)), '../uploads');
 
 export interface KoneksiDb {
   host: string;

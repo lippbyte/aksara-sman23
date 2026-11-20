@@ -48,7 +48,7 @@ export function LogAktivitasPage() {
 
   return (
     <div>
-      <FilterBar onReset={f.reset} adaFilter={f.adaFilter}>
+      <FilterBar lembarMobile onReset={f.reset} adaFilter={f.adaFilter} jumlahAktif={f.jumlahAktif}>
         <FilterItem label="Modul">
           {(id) => (
             <Select
