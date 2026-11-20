@@ -9,3 +9,4 @@ export * from './schemas/kehadiran-siswa';
 export * from './schemas/penilaian';
 export * from './schemas/rekap';
 export * from './schemas/settings';
+export * from './schemas/impor';

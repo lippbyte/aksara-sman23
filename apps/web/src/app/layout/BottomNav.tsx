@@ -48,6 +48,7 @@ export function BottomNav() {
   const { pathname } = useLocation();
   const [lembarBuka, setLembarBuka] = useState(false);
   const papanKetikTerbuka = usePapanKetikTerbuka();
+  const pemicuRef = useRef<HTMLButtonElement>(null);
   const awalSentuhY = useRef<number | null>(null);
   const [geserY, setGeserY] = useState(0);
 
@@ -72,7 +73,13 @@ export function BottomNav() {
   };
 
   return (
-    <>
+    <Dialog.Root
+      open={lembarBuka}
+      onOpenChange={(buka) => {
+        setLembarBuka(buka);
+        if (!buka) setGeserY(0);
+      }}
+    >
       <nav
         aria-label="Navigasi utama"
         className={cn(
@@ -112,164 +119,162 @@ export function BottomNav() {
           ))}
 
           <li className="flex min-w-0">
-            <button
-              type="button"
-              onClick={() => setLembarBuka(true)}
-              aria-expanded={lembarBuka}
-              aria-haspopup="dialog"
-              className={cn(
-                'flex min-h-12 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-2xs font-medium transition-colors duration-150',
-                slotLimaAktif || lembarBuka ? 'text-accent' : 'text-ink-muted hover:text-ink',
-              )}
-            >
-              <span
+            <Dialog.Trigger asChild>
+              <button
+                ref={pemicuRef}
+                type="button"
+                aria-expanded={lembarBuka}
+                aria-haspopup="dialog"
                 className={cn(
-                  'flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200',
-                  slotLimaAktif || lembarBuka ? 'bg-accent-soft text-accent' : 'bg-transparent',
+                  'flex min-h-12 min-w-12 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-2xs font-medium transition-colors duration-150',
+                  slotLimaAktif || lembarBuka ? 'text-accent' : 'text-ink-muted hover:text-ink',
                 )}
               >
-                {labelSlotLima === 'Akun' ? (
-                  <UserRound className="size-[22px] shrink-0" aria-hidden="true" />
-                ) : (
-                  <Ellipsis className="size-[22px] shrink-0" aria-hidden="true" />
-                )}
-              </span>
-              <span className="max-w-full truncate leading-none">{labelSlotLima}</span>
-            </button>
+                <span
+                  className={cn(
+                    'flex h-7 w-12 items-center justify-center rounded-full transition-colors duration-200',
+                    slotLimaAktif || lembarBuka ? 'bg-accent-soft text-accent' : 'bg-transparent',
+                  )}
+                >
+                  {labelSlotLima === 'Akun' ? (
+                    <UserRound className="size-[22px] shrink-0" aria-hidden="true" />
+                  ) : (
+                    <Ellipsis className="size-[22px] shrink-0" aria-hidden="true" />
+                  )}
+                </span>
+                <span className="max-w-full truncate leading-none">{labelSlotLima}</span>
+              </button>
+            </Dialog.Trigger>
           </li>
         </ul>
       </nav>
 
-      <Dialog.Root
-        open={lembarBuka}
-        onOpenChange={(buka) => {
-          setLembarBuka(buka);
-          if (!buka) setGeserY(0);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="overlay-animasi fixed inset-0 z-50 bg-overlay backdrop-blur-sm lg:hidden" />
-          <Dialog.Content
-            aria-describedby={undefined}
-            style={geserY > 0 ? { transform: `translateY(${geserY}px)` } : undefined}
-            className="dialog-animasi lembar-bawah-animasi fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface pb-[env(safe-area-inset-bottom,0px)] shadow-md lg:hidden"
+      <Dialog.Portal>
+        <Dialog.Overlay className="overlay-animasi fixed inset-0 z-50 bg-overlay backdrop-blur-sm lg:hidden" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            pemicuRef.current?.focus();
+          }}
+          style={geserY > 0 ? { transform: `translateY(${geserY}px)` } : undefined}
+          className="dialog-animasi lembar-bawah-animasi fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col rounded-t-2xl border-t border-line bg-surface pb-[env(safe-area-inset-bottom,0px)] shadow-md lg:hidden"
+        >
+          {/* Pegangan geser ke bawah untuk menutup lembar */}
+          <div
+            onTouchStart={(e) => mulaiGeser(e.touches[0]?.clientY ?? 0)}
+            onTouchMove={(e) => gerakGeser(e.touches[0]?.clientY ?? 0)}
+            onTouchEnd={akhirGeser}
+            className="flex flex-col items-center pt-2.5 pb-1"
           >
-            {/* Pegangan geser ke bawah untuk menutup lembar */}
-            <div
-              onTouchStart={(e) => mulaiGeser(e.touches[0]?.clientY ?? 0)}
-              onTouchMove={(e) => gerakGeser(e.touches[0]?.clientY ?? 0)}
-              onTouchEnd={akhirGeser}
-              className="flex flex-col items-center pt-2.5 pb-1"
+            <span className="h-1 w-10 rounded-full bg-line" aria-hidden="true" />
+          </div>
+
+          <div className="flex items-center justify-between border-b border-line-soft px-4 py-2.5">
+            <div className="min-w-0">
+              <Dialog.Title className="text-sm font-semibold text-ink">
+                {labelSlotLima === 'Lainnya' ? 'Menu lainnya' : 'Akun & informasi'}
+              </Dialog.Title>
+              <p className="truncate text-xs text-ink-subtle">
+                {user.name} · {ROLE_LABEL[user.role]}
+                {user.nama_kelas ? ` · ${user.nama_kelas}` : ''}
+              </p>
+            </div>
+            <Dialog.Close
+              aria-label="Tutup menu lainnya"
+              className="-mr-2 flex size-11 items-center justify-center rounded-lg text-ink-muted hover:bg-subtle hover:text-ink"
             >
-              <span className="h-1 w-10 rounded-full bg-line" aria-hidden="true" />
-            </div>
+              <X className="size-5" aria-hidden="true" />
+            </Dialog.Close>
+          </div>
 
-            <div className="flex items-center justify-between border-b border-line-soft px-4 py-2.5">
-              <div className="min-w-0">
-                <Dialog.Title className="text-sm font-semibold text-ink">
-                  {labelSlotLima === 'Lainnya' ? 'Menu lainnya' : 'Akun & informasi'}
-                </Dialog.Title>
-                <p className="truncate text-xs text-ink-subtle">
-                  {user.name} · {ROLE_LABEL[user.role]}
-                  {user.nama_kelas ? ` · ${user.nama_kelas}` : ''}
-                </p>
-              </div>
-              <Dialog.Close
-                aria-label="Tutup menu lainnya"
-                className="-mr-2 flex size-11 items-center justify-center rounded-lg text-ink-muted hover:bg-subtle hover:text-ink"
-              >
-                <X className="size-5" aria-hidden="true" />
-              </Dialog.Close>
-            </div>
-
-            <div className="overflow-y-auto px-3 py-3">
-              {lainnya.length > 0 && (
-                <div className="mb-3">
-                  <p className="mb-1.5 px-2 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
-                    Menu lain
-                  </p>
-                  <ul className="flex flex-col gap-1">
-                    {lainnya.map((item) => (
-                      <li key={item.path}>
-                        <NavLink
-                          to={item.path}
-                          onClick={() => setLembarBuka(false)}
-                          className={({ isActive }) =>
-                            cn(
-                              'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-150',
-                              isActive
-                                ? 'bg-accent-soft text-accent'
-                                : 'text-ink-muted hover:bg-app hover:text-ink',
-                            )
-                          }
-                        >
-                          <item.icon className="size-5 shrink-0" aria-hidden="true" />
-                          <span>{item.label}</span>
-                        </NavLink>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div>
+          <div className="overflow-y-auto px-3 py-3">
+            {lainnya.length > 0 && (
+              <div className="mb-3">
                 <p className="mb-1.5 px-2 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
-                  Akun
+                  Menu lain
                 </p>
                 <ul className="flex flex-col gap-1">
-                  <li>
-                    <Link
-                      to="/profil"
-                      onClick={() => setLembarBuka(false)}
-                      className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-ink-muted hover:bg-app hover:text-ink"
-                    >
-                      <UserRound className="size-5 shrink-0" aria-hidden="true" />
-                      Profil
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/bantuan"
-                      onClick={() => setLembarBuka(false)}
-                      className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-ink-muted hover:bg-app hover:text-ink"
-                    >
-                      <CircleHelp className="size-5 shrink-0" aria-hidden="true" />
-                      Bantuan
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      to="/tentang"
-                      onClick={() => setLembarBuka(false)}
-                      className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-ink-muted hover:bg-app hover:text-ink"
-                    >
-                      <Info className="size-5 shrink-0" aria-hidden="true" />
-                      Tentang
-                    </Link>
-                  </li>
+                  {lainnya.map((item) => (
+                    <li key={item.path}>
+                      <NavLink
+                        to={item.path}
+                        onClick={() => setLembarBuka(false)}
+                        className={({ isActive }) =>
+                          cn(
+                            'flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-150',
+                            isActive
+                              ? 'bg-accent-soft text-accent'
+                              : 'text-ink-muted hover:bg-app hover:text-ink',
+                          )
+                        }
+                      >
+                        <item.icon className="size-5 shrink-0" aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    </li>
+                  ))}
                 </ul>
               </div>
+            )}
 
-              <div className="mt-3 border-t border-line-soft pt-3">
-                <button
-                  type="button"
-                  disabled={keluar.isPending}
-                  onClick={() => {
-                    setLembarBuka(false);
-                    keluar.mutate(undefined, {
-                      onSuccess: () => toast.success('Anda sudah keluar.'),
-                    });
-                  }}
-                  className="tombol-tekan flex min-h-11 w-full items-center gap-3 rounded-lg bg-app px-3 text-sm font-medium text-ink-muted hover:bg-tidak-hadir-soft hover:text-tidak-hadir disabled:opacity-60"
-                >
-                  <LogOut className="size-5 shrink-0" aria-hidden="true" />
-                  <span>Keluar</span>
-                </button>
-              </div>
+            <div>
+              <p className="mb-1.5 px-2 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
+                Akun
+              </p>
+              <ul className="flex flex-col gap-1">
+                <li>
+                  <Link
+                    to="/profil"
+                    onClick={() => setLembarBuka(false)}
+                    className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-ink-muted hover:bg-app hover:text-ink"
+                  >
+                    <UserRound className="size-5 shrink-0" aria-hidden="true" />
+                    Profil
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/bantuan"
+                    onClick={() => setLembarBuka(false)}
+                    className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-ink-muted hover:bg-app hover:text-ink"
+                  >
+                    <CircleHelp className="size-5 shrink-0" aria-hidden="true" />
+                    Bantuan
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/tentang"
+                    onClick={() => setLembarBuka(false)}
+                    className="flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium text-ink-muted hover:bg-app hover:text-ink"
+                  >
+                    <Info className="size-5 shrink-0" aria-hidden="true" />
+                    Tentang
+                  </Link>
+                </li>
+              </ul>
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </>
+
+            <div className="mt-3 border-t border-line-soft pt-3">
+              <button
+                type="button"
+                disabled={keluar.isPending}
+                onClick={() => {
+                  setLembarBuka(false);
+                  keluar.mutate(undefined, {
+                    onSuccess: () => toast.success('Anda sudah keluar.'),
+                  });
+                }}
+                className="tombol-tekan flex min-h-11 w-full items-center gap-3 rounded-lg bg-app px-3 text-sm font-medium text-ink-muted hover:bg-tidak-hadir-soft hover:text-tidak-hadir disabled:opacity-60"
+              >
+                <LogOut className="size-5 shrink-0" aria-hidden="true" />
+                <span>Keluar</span>
+              </button>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

@@ -35,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { api, pesanGalat } from '@/lib/api';
 import { useRefGuru, useRefKelas, useRefMgmp } from '@/lib/referensi';
 import { cn } from '@/lib/utils';
+import { TabImporData } from './TabImporData';
 import { TabSekolah } from './TabSekolah';
 import { TabSumber, type Opsi } from './TabSumber';
 
@@ -46,6 +47,7 @@ const TAB = [
   { id: 'jadwal', label: 'Jadwal' },
   { id: 'mgmp', label: 'MGMP' },
   { id: 'akun', label: 'Akun' },
+  { id: 'impor', label: 'Impor & Data' },
 ] as const;
 type IdTab = (typeof TAB)[number]['id'];
 
@@ -154,6 +156,8 @@ function IsiTab({ tab }: { tab: IdTab }) {
       return <TabMgmp />;
     case 'akun':
       return <TabAkun />;
+    case 'impor':
+      return <TabImporData />;
   }
 }
 

@@ -1,6 +1,6 @@
 import { tableFeatures, useTable, type ColumnDef, type RowData } from '@tanstack/react-table';
 import { ChevronLeft, ChevronRight, Inbox, TriangleAlert, type LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { angka } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { EmptyState } from './EmptyState';
@@ -116,7 +116,7 @@ export function DataTable<T extends RowData>({
       {/* Desktop dan tablet (>=768 px): tabel dengan kontainer gulir aksesibel papan ketik */}
       <div
         tabIndex={0}
-        role="region"
+        role="group"
         aria-label={keterangan}
         className="hidden overflow-x-auto rounded-xl border border-line bg-surface md:block"
       >
@@ -210,6 +210,7 @@ interface PaginationProps {
 }
 
 export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
+  const idLoncat = useId();
   const jumlahHalaman = Math.max(1, Math.ceil(total / pageSize));
   const [inputHalaman, setInputHalaman] = useState(String(page));
 
@@ -255,11 +256,11 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
 
         {jumlahHalaman > 1 ? (
           <form onSubmit={lompat} className="flex items-center gap-1.5">
-            <label htmlFor="loncat-halaman" className="sr-only">
+            <label htmlFor={idLoncat} className="sr-only">
               Loncat ke halaman
             </label>
             <input
-              id="loncat-halaman"
+              id={idLoncat}
               type="number"
               inputMode="numeric"
               min={1}
@@ -268,7 +269,7 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
               value={inputHalaman}
               onChange={(e) => setInputHalaman(e.target.value)}
               onBlur={() => lompat()}
-              className="h-11 w-14 rounded-lg border border-line bg-surface px-2 text-center text-sm text-ink tabular-nums focus:border-accent focus:outline-none sm:h-9"
+              className="h-11 w-14 rounded-lg border border-line bg-surface px-2 text-center text-sm text-ink tabular-nums sm:h-9"
             />
             <span className="text-ink-subtle tabular-nums">/ {angka(jumlahHalaman)}</span>
             <Button type="submit" variant="secondary" size="sm" className="h-11 px-2.5 sm:h-9">

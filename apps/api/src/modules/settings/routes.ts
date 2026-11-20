@@ -4,6 +4,7 @@ import { DIR_UNGGAH } from '../../env';
 import { badRequest, notFound } from '../../lib/errors';
 import { requireAuth, requireRole } from '../../middleware/requireAuth';
 import * as controller from './controller';
+import { imporController } from './impor.controller';
 import * as service from './service';
 
 /** Semua rute Pengaturan hanya untuk admin (PROJECT-CONTEXT §4). */
@@ -38,6 +39,12 @@ pasangCrud('/jadwal', controller.jadwal);
 pasangCrud('/mgmp', controller.mgmp);
 pasangCrud('/users', controller.users);
 settingsRouter.post('/users/:id/reset-password', controller.users.resetPassword);
+
+// Impor data master (CSV UTF-8) & hapus data pilot (admin saja, Fase 14).
+settingsRouter.get('/impor/:jenis/templat', imporController.templat);
+settingsRouter.post('/impor/:jenis/pratinjau', imporController.pratinjau);
+settingsRouter.post('/impor/:jenis/simpan', imporController.simpan);
+settingsRouter.post('/hapus-data-pilot', imporController.hapusDataPilot);
 
 /** Logo sekolah: publik (dipakai halaman login), hanya berkas yang tercatat di pengaturan. */
 export const logoSekolahHandler: RequestHandler = async (_req, res) => {

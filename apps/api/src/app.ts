@@ -50,9 +50,10 @@ export function createApp() {
     );
   }
 
-  // Batas ukuran body: gambar latar & logo lebih longgar, selebihnya 100 KB.
+  // Batas ukuran body: gambar latar, impor CSV, & logo lebih longgar, selebihnya 100 KB.
   app.use('/api/v1/settings/sekolah/logo', express.json({ limit: '500kb' }));
   app.use('/api/v1/settings/sekolah/latar', express.json({ limit: '8mb' }));
+  app.use('/api/v1/settings/impor', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '100kb' }));
 
   const v1 = Router();
