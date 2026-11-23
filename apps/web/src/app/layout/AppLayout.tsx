@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
+import bgSekolah from '@/images/background.jpeg';
 import { PENGEMBANG, STATUS_PRODUK } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { BottomNav } from './BottomNav';
@@ -34,7 +35,14 @@ export function AppLayout() {
   }, []);
 
   return (
-    <div className="flex min-h-dvh bg-app text-ink">
+    <div className="relative flex min-h-dvh bg-app text-ink">
+      {/* Subtle background di setiap halaman aplikasi */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-[0.06]"
+        style={{ backgroundImage: `url(${bgSekolah})` }}
+        aria-hidden="true"
+      />
+
       <a
         href="#konten"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-3 focus:py-2 focus:text-on-primary"

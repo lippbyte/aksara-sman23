@@ -1,7 +1,8 @@
-import { LogOut, School } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { NavLink } from 'react-router';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import logoSman23 from '@/images/logo.png';
 import { useAuth, useKeluar } from '@/lib/auth';
 import { APP_NAME } from '@/lib/config';
 import { cn } from '@/lib/utils';
@@ -25,23 +26,17 @@ export function SidebarContent({ collapsed = false, onNavigate }: SidebarContent
           collapsed && 'justify-center px-0',
         )}
       >
-        {sekolah?.logo_url ? (
-          <img
-            src={sekolah.logo_url}
-            alt=""
-            className="size-8 shrink-0 rounded-lg object-contain"
-          />
-        ) : (
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-subtle">
-            <School className="size-[18px] text-ink-muted" aria-hidden="true" />
-          </span>
-        )}
+        <img
+          src={sekolah?.logo_url || logoSman23}
+          alt="Logo SMAN 23"
+          className="size-8 shrink-0 rounded-lg object-contain"
+        />
         {!collapsed && (
           <div className="min-w-0">
             <p className="truncate text-sm leading-tight font-semibold text-ink">{APP_NAME}</p>
             {sekolah && (
               <p className="truncate text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
-                {sekolah.nama_sekolah}
+                SMAN 23 Bandung
               </p>
             )}
           </div>
