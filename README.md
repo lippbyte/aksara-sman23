@@ -1,7 +1,7 @@
-# School Management System (nama kerja)
+# Aksara - Administrasi dan Sistem Informasi Sekolah
 
-Aplikasi web untuk mencatat dan merekap kehadiran guru di kelas dan kehadiran siswa, serta
-mendokumentasikan penilaian kinerja guru.
+Aplikasi web untuk mencatat dan merekap kehadiran guru di kelas dan kehadiran siswa, mengelola
+data master serta jadwal mengajar, dan mendokumentasikan penilaian kinerja guru.
 
 **Status: In Development.** Belum pernah dipakai di sekolah nyata. Pengembangan dan demo hanya
 memakai data contoh (fiktif). Dikembangkan oleh EDILAKSO.
@@ -29,7 +29,8 @@ memakai data contoh (fiktif). Dikembangkan oleh EDILAKSO.
   pengaturan sekolah. Skor siswa MGMP diisi per kelas oleh sekretaris kelas itu.
 - **Laporan Rekap Siswa** dengan ekspor CSV.
 - **Dashboard** sesuai peran: ringkasan pimpinan, dashboard kelas, dashboard penilai.
-- **Pengaturan** data master dan akun, **Log Aktivitas**.
+- **Pengaturan** data master (termasuk impor massal Excel `.xlsx` / CSV untuk guru, siswa X/XI/XII
+  beserta Wali Kelas & BK, serta jadwal mengajar), akun, dan **Log Aktivitas**.
 
 Hak akses per peran mengikuti PROJECT-CONTEXT §4 dan diperiksa di server.
 

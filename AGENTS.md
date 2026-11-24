@@ -163,3 +163,61 @@ Tulis asumsi sebagai `// ASUMSI: …` di kode dan cantumkan di ringkasan akhir. 
 - Gambar yang spesifik sekolah (foto gedung, logo) tidak masuk repo. Gambar itu diunggah admin lewat Pengaturan Sekolah,
   disimpan di `UPLOAD_DIR` (di luar git), dan memakai gambar bawaan netral bila belum ada.
 - Unggahan gambar: batasi tipe (jpeg, png, webp) dan ukuran, buang metadata EXIF (termasuk lokasi GPS), ubah ukuran di server.
+
+---
+
+## 13. Standar UI & Web (apple-design, modern-web-guidance, Phosphor)
+
+Section ini melengkapi §7 dan §11. Bila bertentangan, `DESIGN.md` dan batasan keamanan/data di §6 menang.
+
+### Referensi wajib
+
+- **Skill UI/mobile** (terpasang di `.agents/skills/`, dibaca Claude Code lewat `.claude/skills/`): `apple-design`, `gestures`,
+  `mobile-native`, `animation-performance`. Aktifkan sebelum membuat atau meninjau komponen interaktif.
+  `apple-design` bukan dokumen resmi Apple, melainkan skill komunitas (MIT); anggap sebagai panduan, bukan aturan mutlak.
+- **Kode web**: skill `modern-web-guidance` + `npx modern-web-guidance@latest search "<tugas>"` lalu `retrieve "<id>"` (lihat §11).
+  Audit pola usang: `npx modern-web-guidance@latest legacy-scan .`
+- **Ikon**: Phosphor Icons (`@phosphor-icons/react`, https://phosphoricons.com) untuk **semua kode baru**.
+
+### Prinsip apple-design (ringkas)
+
+- Umpan balik saat pointer-down. Gestur memakai Pointer Events + `setPointerCapture`; objek mengikuti jari 1:1.
+- Animasi harus bisa diinterupsi (mulai dari nilai saat ini). Jangan pakai CSS transition/keyframes untuk gestur drag/swipe,
+  yaitu objek yang mengikuti jari. Elemen yang bisa di-drag atau di-swipe (mis. lembar) termasuk gestur.
+  Perubahan status non-gestur (hover, buka/tutup, masuk/keluar, fokus) boleh memakai transisi CSS
+  dengan token gerak dan hanya `transform`/`opacity`.
+- Animasikan hanya `transform` dan `opacity`; `will-change` hanya bila terukur perlu.
+  Animasi progress/isi bar lewat `transform: scaleX()` dengan `transform-origin: left`, bukan `width`.
+- Spring default: damping 1.0, response 0.3–0.4 s; ~0.8 hanya untuk gestur bermomentum. Kecepatan lepas jari = kecepatan awal.
+- Tombol ditekan: `scale(0.97)`, 100 ms ease-out. Ambang arah gestur ~10 px. Rubber-banding di batas (0.55).
+- Hormati `prefers-reduced-motion` (ganti slide/spring dengan cross-fade ~200 ms), `prefers-reduced-transparency`, `prefers-contrast: more`.
+- `backdrop-filter` (kaca/blur) wajib punya cadangan solid dari token untuk `prefers-reduced-transparency: reduce`,
+  `prefers-contrast: more`, dan `@supports not (backdrop-filter: blur(1px))`.
+- Tipografi: satuan `rem`/`em`; judul besar tracking ≈ -0.02em, body line-height ≈ 1.5.
+
+### Tambahan mobile (praktik umum, bukan dari tiga sumber di atas)
+
+- Target sentuh ≥ 44×44 px. Pakai `dvh`, bukan `vh`, untuk tinggi layar penuh.
+- Hormati safe area (`viewport-fit=cover` sudah ada di `index.html`; pakai `env(safe-area-inset-*)`, mis. di `BottomNav`).
+- Font input ≥ 16 px agar iOS tidak auto-zoom. Atur `touch-action` dan `overscroll-behavior` sesuai gestur.
+- Uji di viewport 360 px (sejalan dengan §8).
+
+### Phosphor — aturan pakai
+
+- Impor spesifik: `import { UsersIcon } from '@phosphor-icons/react'` (nama berakhiran `Icon`). Dilarang `import * as`.
+- Weight utama satu saja per antarmuka: `regular`; `fill` untuk status aktif/terpilih; `duotone` hanya dekoratif.
+- Warna `currentColor` (warna lewat token, bukan warna mentah). Ukuran/weight default lewat `IconContext.Provider` bila sudah dipasang.
+- Ikon tombol tanpa teks wajib `aria-label`; ikon dekoratif `aria-hidden="true"`.
+- **Ikon lama (`lucide-react`, ±32 file, dipakai juga oleh shadcn di `components/ui/`) JANGAN dimigrasi massal.**
+  Migrasi bertahap menunggu persetujuan tim; kode baru dan file yang sedang disentuh besar-besaran boleh langsung Phosphor.
+  Jangan campur dua library ikon dalam satu komponen.
+
+### Token proyek (dari `apps/web/src/styles/tokens.css`)
+
+- Warna lewat custom property, bukan nilai mentah: `--bg-app`, `--bg-surface`, `--bg-subtle`, `--border`, `--text`, `--text-muted`,
+  `--text-subtle`, `--icon-muted`, `--primary`, `--on-primary`, `--accent`, `--accent-soft`, `--focus`, `--danger`, `--overlay`
+  (plus token status). Palet bawaan Tailwind dimatikan; komponen hanya memakai token.
+- Gerak: `--dur-fast` 150ms, `--dur-base` 220ms, `--dur-slow` 320ms, `--ease-out` cubic-bezier(0.2, 0.8, 0.2, 1).
+- Font: Inter (`--font-sans`, via `@fontsource/inter`), fallback system-ui.
+- Styling: Tailwind CSS v4 (`@theme inline`) + shadcn/ui (Radix) + `class-variance-authority`.
+- Browser target: tidak ada `browserslist`; target nyata Chrome Android dan desktop sekolah (§11). Pakai `@supports`/peningkatan bertahap.
