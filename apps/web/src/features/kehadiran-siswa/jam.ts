@@ -8,6 +8,72 @@ export interface InfoJam {
   tersimpan?: boolean;
 }
 
+/** Item pemilih berbasis jadwal pelajaran untuk komponen `PilihJam`. */
+export interface ItemJadwalJam {
+  jam_ke: number;
+  jam_akhir: number;
+  judul: string;
+  subjudul: string;
+  tersimpan?: boolean;
+}
+
+/**
+ * Susun opsi pemilih berbasis jadwal pelajaran pada hari itu, digabung dengan jam yang
+ * sudah tersimpan di luar jadwal agar data tersimpan tetap bisa diakses.
+ */
+export function buatOpsiJadwal(
+  jadwal: readonly Pick<JadwalHari, 'jam_ke' | 'total_jam_mengajar' | 'mata_pelajaran'>[],
+  jamTersimpan: Iterable<number>,
+): ItemJadwalJam[] {
+  const tersimpanSet = new Set(jamTersimpan);
+  const perJamMulai = new Map<number, { mapel: string; akhir: number }>();
+
+  for (const j of jadwal) {
+    const akhir = j.jam_ke + Math.max(1, j.total_jam_mengajar) - 1;
+    const ada = perJamMulai.get(j.jam_ke);
+    if (ada) {
+      perJamMulai.set(j.jam_ke, {
+        mapel: `${ada.mapel} / ${j.mata_pelajaran}`,
+        akhir: Math.max(ada.akhir, akhir),
+      });
+    } else {
+      perJamMulai.set(j.jam_ke, { mapel: j.mata_pelajaran, akhir });
+    }
+  }
+
+  const hasil: ItemJadwalJam[] = [];
+  const tercakup = new Set<number>();
+
+  for (const [jamKe, data] of [...perJamMulai.entries()].sort(([a], [b]) => a - b)) {
+    let sudahTersimpan = false;
+    for (let jam = jamKe; jam <= data.akhir; jam += 1) {
+      tercakup.add(jam);
+      if (tersimpanSet.has(jam)) sudahTersimpan = true;
+    }
+    hasil.push({
+      jam_ke: jamKe,
+      jam_akhir: data.akhir,
+      judul: data.mapel,
+      subjudul: data.akhir > jamKe ? `Jam ${jamKe}–${data.akhir}` : `Jam ${jamKe}`,
+      tersimpan: sudahTersimpan,
+    });
+  }
+
+  for (const jam of [...tersimpanSet].sort((a, b) => a - b)) {
+    if (!tercakup.has(jam)) {
+      hasil.push({
+        jam_ke: jam,
+        jam_akhir: jam,
+        judul: `Jam ke-${jam}`,
+        subjudul: 'Di luar jadwal',
+        tersimpan: true,
+      });
+    }
+  }
+
+  return hasil.sort((a, b) => a.jam_ke - b.jam_ke);
+}
+
 /**
  * Gabungkan jadwal hari itu dan daftar jam yang sudah tersimpan menjadi info per jam.
  * Slot jadwal `jam_ke` s.d. `jam_ke + total_jam_mengajar − 1` menandai semua jam yang

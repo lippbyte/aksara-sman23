@@ -158,7 +158,7 @@ describe('Absensi Siswa', () => {
     await waitFor(() => expect(router.state.location.search).toBe('?tanggal=2026-11-17'));
   });
 
-  it('pemilih jam menandai jam tersimpan dan mapel terjadwal; memilih jam mengubah URL', async () => {
+  it('pemilih jadwal menandai mapel terjadwal dan status tersimpan; memilih jadwal mengubah URL', async () => {
     pasangApiTiruan('sekretaris_kelas', (url, init) => {
       if (url.includes('/kehadiran-siswa/riwayat') && url.includes('tanggal_dari=2026-11-16')) {
         return {
@@ -193,6 +193,15 @@ describe('Absensi Siswa', () => {
                 total_jam_mengajar: 2,
                 sudah_dicatat: true,
               },
+              {
+                guru_id: 4,
+                kode_guru: 'G04',
+                nama_guru: 'Guru Contoh 04',
+                mata_pelajaran: 'Kimia',
+                jam_ke: 3,
+                total_jam_mengajar: 1,
+                sudah_dicatat: false,
+              },
             ],
           },
         };
@@ -200,15 +209,15 @@ describe('Absensi Siswa', () => {
       return penjawab()(url, init);
     });
     const { router } = tampilkanApp('/absensi-siswa?tanggal=2026-11-16');
-    const grupJam = await screen.findByRole('radiogroup', { name: 'Jam ke-' });
+    const selectJadwal = await screen.findByLabelText('Jadwal pelajaran');
     expect(
-      await within(grupJam).findByRole('radio', { name: 'Jam ke-1, Fisika, sudah tersimpan' }),
-    ).toHaveAttribute('aria-checked', 'true');
-    expect(within(grupJam).getByRole('radio', { name: 'Jam ke-2, Fisika' })).toBeInTheDocument();
+      await within(selectJadwal).findByRole('option', { name: 'Fisika (Jam 1–2) · Tersimpan' }),
+    ).toBeInTheDocument();
+    expect(within(selectJadwal).getByRole('option', { name: 'Kimia (Jam 3)' })).toBeInTheDocument();
     // Mapel jam ini ikut tampil di kepala sesi (hanya petunjuk, keputusan D7 opsi a).
     expect(await screen.findByText(/Senin, 16 Nov 2026 · Fisika/)).toBeInTheDocument();
 
-    fireEvent.click(within(grupJam).getByRole('radio', { name: 'Jam ke-3' }));
+    fireEvent.change(selectJadwal, { target: { value: '3' } });
     await waitFor(() => expect(router.state.location.search).toBe('?tanggal=2026-11-16&jam_ke=3'));
   });
 
@@ -228,7 +237,7 @@ describe('Absensi Siswa', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Simpan absensi' }));
     const lanjut = await screen.findByRole('button', { name: 'Lanjut ke jam ke-2' });
     expect(screen.getByText('Absensi jam ini tersimpan.')).toBeInTheDocument();
-    expect(screen.getByText('Tersimpan')).toBeInTheDocument();
+    expect(screen.queryByText('Tersimpan')).not.toBeInTheDocument();
 
     fireEvent.click(lanjut);
     await waitFor(() => expect(router.state.location.search).toBe('?tanggal=2026-11-16&jam_ke=2'));

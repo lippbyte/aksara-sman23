@@ -9,7 +9,6 @@ import {
 import {
   ArrowRightIcon,
   ChalkboardIcon,
-  CheckCircleIcon,
   ChecksIcon,
   ClockCounterClockwiseIcon,
   FloppyDiskIcon,
@@ -17,7 +16,8 @@ import {
   UsersIcon,
   WarningIcon,
 } from '@phosphor-icons/react';
-import { useId, useMemo, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
+import { Fragment, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
@@ -25,7 +25,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { FilterItem } from '@/components/FilterBar';
 import { NavigasiTanggal } from '@/components/NavigasiTanggal';
 import { PenjagaPerubahan } from '@/components/PenjagaPerubahan';
-import { PilihJam } from '@/components/PilihJam';
 import { SegmentedStatus } from '@/components/SegmentedStatus';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -37,7 +36,7 @@ import { usePengguna } from '@/lib/auth';
 import { angka, hariIni, tanggalPanjang, tanggalPendek } from '@/lib/format';
 import { useRefKelas } from '@/lib/referensi';
 import { cn, gulirKeAtas } from '@/lib/utils';
-import { useJadwalHari } from '../kehadiran/api';
+import { ambilJadwalHari, useJadwalHari } from '../kehadiran/api';
 import {
   useHapusSesiSiswa,
   useJamTersimpan,
@@ -46,7 +45,7 @@ import {
   useSimpanSesiSiswa,
 } from './api';
 import { gabungIsian, hitungBerubah, type PetaIsian, type IsianSiswa } from './isian';
-import { petaInfoJam } from './jam';
+import { buatOpsiJadwal, petaInfoJam } from './jam';
 
 const LABEL_STATUS: Record<StatusSiswa, string> = {
   hadir: 'Hadir',
@@ -56,18 +55,6 @@ const LABEL_STATUS: Record<StatusSiswa, string> = {
 };
 const OPSI_STATUS = STATUS_SISWA.map((s) => ({ nilai: s, label: LABEL_STATUS[s] }));
 const OPSI_JAM = Array.from({ length: JAM_KE_MAX - JAM_KE_MIN + 1 }, (_, i) => JAM_KE_MIN + i);
-
-/**
- * Baris siswa yang tidak hadir diberi latar lembut + garis tepi warna statusnya agar
- * pengecualian langsung terlihat saat memindai 30+ baris (audit Fase 2 S5). Status tetap
- * tertulis di tombol terpilih, jadi warna bukan satu-satunya penanda.
- */
-const TITIK: Record<StatusSiswa, string> = {
-  hadir: 'bg-hadir-chart',
-  izin: 'bg-izin-chart',
-  sakit: 'bg-sakit-chart',
-  alpa: 'bg-tidak-hadir-chart',
-};
 
 const TANDA_BARIS: Record<Exclude<StatusSiswa, 'hadir'>, { latar: string; garis: string }> = {
   izin: { latar: 'bg-izin-soft', garis: 'bg-izin-chart' },
@@ -80,7 +67,6 @@ export function AbsensiSiswaPage() {
   const sekretaris = user.role === 'sekretaris_kelas';
   // Matriks akses: manajemen_guru hanya melihat; admin dan sekretaris boleh mengisi.
   const bolehUbah = user.role === 'admin' || sekretaris;
-  const idLabelJam = useId();
 
   const [params, setParams] = useSearchParams();
   const kelasId = sekretaris ? user.kelas_id : Number(params.get('kelas_id')) || null;
@@ -105,69 +91,96 @@ export function AbsensiSiswaPage() {
   const aturJam = (jam: number) => atur({ jam_ke: jam === 1 ? '' : String(jam) });
 
   const kelas = useRefKelas();
-  const sesi = useSesiSiswa(
-    { kelas_id: kelasId, tanggal, jam_ke: jamKeSah },
-    kelasId !== null && tanggal !== '',
-  );
-  // Petunjuk di pemilih jam: mapel terjadwal (hanya tampilan, D7 opsi a) + jam yang tersimpan.
+  // Petunjuk di pemilih jadwal: mapel terjadwal + jam yang tersimpan.
   const jadwal = useJadwalHari(kelasId, tanggal, kelasId !== null);
   const tersimpan = useJamTersimpan(kelasId, tanggal);
   const infoJam = useMemo(
     () => petaInfoJam(jadwal.data ?? [], tersimpan.jam),
     [jadwal.data, tersimpan.jam],
   );
+  const opsiJadwal = useMemo(
+    () => buatOpsiJadwal(jadwal.data ?? [], tersimpan.jam),
+    [jadwal.data, tersimpan.jam],
+  );
+  const jamKeEfektif =
+    !params.has('jam_ke') &&
+    opsiJadwal.length > 0 &&
+    !opsiJadwal.some((o) => jamKeSah >= o.jam_ke && jamKeSah <= o.jam_akhir)
+      ? opsiJadwal[0]!.jam_ke
+      : jamKeSah;
+
+  const sesi = useSesiSiswa(
+    { kelas_id: kelasId, tanggal, jam_ke: jamKeEfektif },
+    kelasId !== null && tanggal !== '',
+  );
+
+  const indeksSlotAktif = sesi.data
+    ? opsiJadwal.findIndex((o) => sesi.data.jam_ke >= o.jam_ke && sesi.data.jam_ke <= o.jam_akhir)
+    : -1;
+  const jamBerikutnya =
+    opsiJadwal.length > 0
+      ? indeksSlotAktif >= 0 && indeksSlotAktif < opsiJadwal.length - 1
+        ? opsiJadwal[indeksSlotAktif + 1]!.jam_ke
+        : undefined
+      : sesi.data && sesi.data.jam_ke < JAM_KE_MAX
+        ? sesi.data.jam_ke + 1
+        : undefined;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Bar sesi: kelas (bukan sekretaris), tanggal, dan jam di satu tempat (audit Fase 2 S1–S3). */}
+      {/* Bar sesi: kelas (bukan sekretaris), tanggal, dan jadwal di satu tempat (audit Fase 2 S1–S3). */}
       <section
         aria-label="Pilih sesi absensi"
-        className="flex flex-col gap-3 rounded-kartu border border-line bg-surface p-3 shadow-[var(--shadow-card)] sm:p-4 lg:flex-row lg:items-end lg:gap-4"
+        className="flex flex-col gap-3 rounded-kartu border border-line bg-surface p-3 shadow-[var(--shadow-card)] sm:flex-row sm:flex-wrap sm:items-end sm:p-4 lg:gap-4"
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end lg:shrink-0">
-          {!sekretaris && (
-            <FilterItem label="Kelas" className="sm:w-32">
-              {(id) => (
-                <Select
-                  id={id}
-                  value={kelasId ?? ''}
-                  onChange={(e) => atur({ kelas_id: e.target.value })}
-                >
-                  <option value="">Pilih…</option>
-                  {kelas.data?.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.nama_kelas}
-                    </option>
-                  ))}
-                </Select>
+        {!sekretaris && (
+          <FilterItem label="Kelas" className="sm:w-32">
+            {(id) => (
+              <Select
+                id={id}
+                value={kelasId ?? ''}
+                onChange={(e) => atur({ kelas_id: e.target.value })}
+              >
+                <option value="">Pilih…</option>
+                {kelas.data?.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.nama_kelas}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FilterItem>
+        )}
+        <NavigasiTanggal nilai={tanggal} onUbah={(t) => atur({ tanggal: t })} className="sm:w-88" />
+        <FilterItem label="Jadwal pelajaran" className="sm:min-w-52 sm:flex-1 lg:max-w-72">
+          {(id) => (
+            <Select
+              id={id}
+              disabled={kelasId === null || jadwal.isPending}
+              value={kelasId === null || jadwal.isPending ? '' : jamKeEfektif}
+              onChange={(e) => aturJam(Number(e.target.value))}
+            >
+              {kelasId === null ? (
+                <option value="">Pilih kelas dulu…</option>
+              ) : jadwal.isPending ? (
+                <option value="">Memuat jadwal…</option>
+              ) : opsiJadwal.length > 0 ? (
+                opsiJadwal.map((o) => (
+                  <option key={o.jam_ke} value={o.jam_ke}>
+                    {o.judul} ({o.subjudul}){o.tersimpan ? ' · Tersimpan' : ''}
+                  </option>
+                ))
+              ) : (
+                OPSI_JAM.map((jam) => (
+                  <option key={jam} value={jam}>
+                    Jam ke-{jam}
+                    {infoJam.get(jam)?.tersimpan ? ' · Tersimpan' : ''}
+                  </option>
+                ))
               )}
-            </FilterItem>
+            </Select>
           )}
-          <NavigasiTanggal
-            nilai={tanggal}
-            onUbah={(t) => atur({ tanggal: t })}
-            className="sm:w-88"
-          />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <span id={idLabelJam} className="text-xs font-medium text-ink-muted">
-              Jam ke-
-            </span>
-            <span aria-hidden="true" className="flex items-center gap-1 text-2xs text-ink-subtle">
-              <CheckCircleIcon weight="fill" className="size-3 text-hadir" />
-              sudah tersimpan
-            </span>
-          </div>
-          <PilihJam
-            label="Jam ke-"
-            aria-labelledby={idLabelJam}
-            opsi={OPSI_JAM}
-            nilai={jamKeSah}
-            onUbah={aturJam}
-            info={kelasId !== null ? infoJam : undefined}
-          />
-        </div>
+        </FilterItem>
       </section>
 
       {kelasId === null ? (
@@ -203,9 +216,9 @@ export function AbsensiSiswaPage() {
           mapel={infoJam.get(sesi.data.jam_ke)?.mapel}
           bolehUbah={bolehUbah}
           onLanjut={
-            sesi.data.jam_ke < JAM_KE_MAX
+            jamBerikutnya !== undefined
               ? () => {
-                  aturJam(sesi.data.jam_ke + 1);
+                  aturJam(jamBerikutnya);
                   gulirKeAtas();
                 }
               : undefined
@@ -353,26 +366,23 @@ function FormSesi({
             </Button>
           )}
         </div>
-        <div className="min-w-0">
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
+        <div className="mt-0.5 flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-ink-muted">
             <span>
               {tanggalPanjang(sesi.tanggal)}
               {mapel && ` · ${mapel}`}
             </span>
-            <StatusBadge
-              status={sesi.sudah_diisi ? 'Tersimpan' : 'Belum diisi'}
-              nada={sesi.sudah_diisi ? 'hadir' : 'peringatan'}
-            />
+            {!sesi.sudah_diisi && <StatusBadge status="Belum diisi" nada="peringatan" />}
           </p>
           <ul
-            className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink"
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-subtle sm:justify-end"
             aria-label="Ringkasan status"
           >
-            {STATUS_SISWA.map((s) => (
-              <li key={s} className="flex items-center gap-1.5 tabular-nums">
-                <span aria-hidden="true" className={cn('size-2 rounded-full', TITIK[s])} />
-                {`${LABEL_STATUS[s]} ${angka(hitungan[s])}`}
-              </li>
+            {STATUS_SISWA.map((s, idx) => (
+              <Fragment key={s}>
+                {idx > 0 && <li aria-hidden="true">·</li>}
+                <li className="tabular-nums">{`${LABEL_STATUS[s]} ${angka(hitungan[s])}`}</li>
+              </Fragment>
             ))}
           </ul>
         </div>
@@ -495,12 +505,38 @@ function RiwayatSesi({
   const hapus = useHapusSesiSiswa();
   const [akanDihapus, setAkanDihapus] = useState<RiwayatSesiSiswa | null>(null);
 
+  const tanggalUnik = useMemo(
+    () => [...new Set((riwayat.data?.data ?? []).map((r) => r.tanggal))],
+    [riwayat.data],
+  );
+  const jadwalPerTanggal = useQueries({
+    queries: tanggalUnik.map((t) => ({
+      queryKey: ['kehadiran', 'jadwal', kelasId, t],
+      queryFn: () => ambilJadwalHari(kelasId, t),
+      enabled: t !== '',
+    })),
+  });
+  const petaJadwalTanggal = useMemo(() => {
+    const peta = new Map<string, ReturnType<typeof buatOpsiJadwal>>();
+    tanggalUnik.forEach((t, idx) => {
+      const data = jadwalPerTanggal[idx]?.data;
+      if (data) peta.set(t, buatOpsiJadwal(data, []));
+    });
+    return peta;
+  }, [tanggalUnik, jadwalPerTanggal]);
+
+  const labelJadwal = (r: RiwayatSesiSiswa) => {
+    const daftar = petaJadwalTanggal.get(r.tanggal);
+    const cocok = daftar?.find((o) => r.jam_ke >= o.jam_ke && r.jam_ke <= o.jam_akhir);
+    return cocok ? `${cocok.judul} (${cocok.subjudul})` : `Jam ke-${r.jam_ke}`;
+  };
+
   const tombolAksi = (r: RiwayatSesiSiswa) => (
     <span className="inline-flex gap-1">
       <Button
         variant="ghost"
         size="touch"
-        aria-label={`Buka absensi ${tanggalPendek(r.tanggal)} jam ke-${r.jam_ke}`}
+        aria-label={`Buka absensi ${tanggalPendek(r.tanggal)} ${labelJadwal(r)}`}
         onClick={() => onBuka(r)}
       >
         Buka
@@ -509,7 +545,7 @@ function RiwayatSesi({
         <Button
           variant="ghost"
           size="icon"
-          aria-label={`Hapus absensi ${tanggalPendek(r.tanggal)} jam ke-${r.jam_ke}`}
+          aria-label={`Hapus absensi ${tanggalPendek(r.tanggal)} ${labelJadwal(r)}`}
           onClick={() => setAkanDihapus(r)}
         >
           <TrashIcon aria-hidden="true" />
@@ -525,7 +561,7 @@ function RiwayatSesi({
       utama: true,
       sel: (r) => <span className="tabular-nums">{tanggalPendek(r.tanggal)}</span>,
     },
-    { id: 'jam', judul: 'Jam ke-', angka: true, sel: (r) => r.jam_ke },
+    { id: 'jam', judul: 'Jadwal pelajaran', sel: (r) => labelJadwal(r) },
     ...STATUS_SISWA.map((s) => ({
       id: s,
       judul: LABEL_STATUS[s],
@@ -561,7 +597,7 @@ function RiwayatSesi({
           <article className="flex items-center gap-3 rounded-kartu border border-line bg-surface py-2 pr-2 pl-3 shadow-[var(--shadow-card)]">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-ink tabular-nums">
-                {tanggalPendek(r.tanggal)} · Jam ke-{r.jam_ke}
+                {tanggalPendek(r.tanggal)} · {labelJadwal(r)}
               </p>
               <p className="text-xs text-ink-muted tabular-nums">
                 {STATUS_SISWA.map((s) => `${LABEL_STATUS[s]} ${angka(r[s])}`).join(' · ')}

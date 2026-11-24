@@ -19,16 +19,21 @@ export function useDaftarKehadiran(params: Param) {
   });
 }
 
+/** Mengambil jadwal kelas pada tanggal tertentu (dipakai pemilih jadwal & riwayat). */
+export async function ambilJadwalHari(
+  kelasId: number | null,
+  tanggal: string,
+): Promise<JadwalHari[]> {
+  return (
+    await api.get<Respons<JadwalHari[]>>(`/kehadiran/jadwal${qs({ kelas_id: kelasId, tanggal })}`)
+  ).data;
+}
+
 /** Jadwal kelas pada tanggal itu; untuk sekretaris `kelasId` boleh kosong (dari akunnya). */
 export function useJadwalHari(kelasId: number | null, tanggal: string, aktif: boolean) {
   return useQuery({
     queryKey: ['kehadiran', 'jadwal', kelasId, tanggal],
-    queryFn: async () =>
-      (
-        await api.get<Respons<JadwalHari[]>>(
-          `/kehadiran/jadwal${qs({ kelas_id: kelasId, tanggal })}`,
-        )
-      ).data,
+    queryFn: () => ambilJadwalHari(kelasId, tanggal),
     enabled: aktif && tanggal !== '',
   });
 }

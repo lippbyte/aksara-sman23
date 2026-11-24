@@ -1,4 +1,3 @@
-import { CheckIcon } from '@phosphor-icons/react';
 import { useRef, type KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils';
 import { nadaStatus, type NadaStatus } from './StatusBadge';
@@ -115,17 +114,6 @@ export function SegmentedStatus<T extends string | number>({
                 : 'border-line-kontrol bg-surface font-medium text-ink-muted hover:border-accent hover:text-ink',
             )}
           >
-            {terpilih && (
-              <CheckIcon
-                weight="fill"
-                // Centang hanya bila muat; label lebih penting daripada centang.
-                className={cn(
-                  'hidden size-3.5 shrink-0',
-                  ringkas ? '@min-[18rem]:block' : '@min-[30rem]:block',
-                )}
-                aria-hidden="true"
-              />
-            )}
             <span className="truncate">{o.label}</span>
           </button>
         );
