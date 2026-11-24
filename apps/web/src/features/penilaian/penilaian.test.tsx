@@ -95,6 +95,24 @@ describe('Penilaian Kinerja', () => {
     expect(screen.getByText('Terbuka')).toBeInTheDocument();
   });
 
+  it('kartu ponsel: skor ringkas satu baris, predikat, dan tombol Nilai', async () => {
+    pasangApiTiruan('guru_penilai', (url) =>
+      url.includes('/penilaian-kinerja?') ? { body: daftar(KINERJA) } : undefined,
+    );
+    tampilkanApp('/penilaian-kinerja?bulan=11&tahun=2026');
+    const kartu = await screen.findByRole('article', { name: 'Guru Contoh 01' });
+    expect(within(kartu).getByText('Matematika')).toBeInTheDocument();
+    expect(
+      within(kartu).getByText(
+        'Skor akhir 89,63 · Kehadiran 91,25 · Administrasi 88,00 · Manajemen —',
+      ),
+    ).toBeInTheDocument();
+    expect(within(kartu).getByText('Baik')).toBeInTheDocument();
+    expect(within(kartu).getByRole('button', { name: 'Nilai Guru Contoh 01' })).toBeEnabled();
+    const belum = screen.getByRole('article', { name: 'Guru Contoh 02' });
+    expect(within(belum).getByText('Belum dinilai')).toBeInTheDocument();
+  });
+
   it('jendela tertutup: guru_penilai tidak bisa menilai; admin tetap bisa dengan pemberitahuan log', async () => {
     pasangApiTiruan('guru_penilai', (url) =>
       url.includes('/penilaian-kinerja?') ? { body: daftar(KINERJA, JENDELA_TUTUP) } : undefined,
@@ -152,7 +170,7 @@ describe('Penilaian Kinerja', () => {
     pasangApiTiruan('sekretaris_kelas');
     tampilkanApp('/penilaian-kinerja');
     expect(
-      await screen.findByText('Peran Anda tidak memiliki akses ke halaman ini.'),
+      await screen.findByText('Halaman ini tidak tersedia untuk peran Anda'),
     ).toBeInTheDocument();
   });
 });

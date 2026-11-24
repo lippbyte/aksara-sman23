@@ -6,12 +6,18 @@ import {
   type SimpanPenilaianKinerjaForm,
   type SimpanPenilaianKinerjaInput,
 } from '@sms/shared';
-import { Award, ClipboardPen, Download, RefreshCw } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowsClockwiseIcon,
+  DownloadSimpleIcon,
+  MedalIcon,
+  NotePencilIcon,
+} from '@phosphor-icons/react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
 import { FilterItem } from '@/components/FilterBar';
+import { KartuRingkas } from '@/components/KartuRingkas';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, Dialog, DialogAksi } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
@@ -26,6 +32,7 @@ import {
   keSkor,
   LencanaPredikat,
   TeksSkor,
+  teksSkor,
   usePeriodeUrl,
 } from './komponen';
 
@@ -47,6 +54,23 @@ export function PenilaianKinerjaPage() {
 
   const jendela = daftar.data?.jendela;
   const bolehIsi = admin || jendela?.terbuka === true;
+
+  const tombolNilai = useCallback(
+    (b: PenilaianKinerjaBaris) => (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="min-h-11 md:min-h-0"
+        disabled={!bolehIsi}
+        aria-label={`Nilai ${b.nama_guru}`}
+        onClick={() => setDinilai(b)}
+      >
+        <NotePencilIcon aria-hidden="true" />
+        Nilai
+      </Button>
+    ),
+    [bolehIsi],
+  );
 
   const kolom = useMemo<Kolom<PenilaianKinerjaBaris>[]>(
     () => [
@@ -90,26 +114,25 @@ export function PenilaianKinerjaPage() {
         ),
       },
       { id: 'predikat', judul: 'Predikat', sel: (b) => <LencanaPredikat predikat={b.predikat} /> },
-      {
-        id: 'aksi',
-        judul: 'Aksi',
-        aksi: true,
-        sel: (b) => (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-11 md:min-h-0"
-            disabled={!bolehIsi}
-            aria-label={`Nilai ${b.nama_guru}`}
-            onClick={() => setDinilai(b)}
-          >
-            <ClipboardPen aria-hidden="true" />
-            Nilai
-          </Button>
-        ),
-      },
+      { id: 'aksi', judul: 'Aksi', aksi: true, sel: tombolNilai },
     ],
-    [bolehIsi],
+    [tombolNilai],
+  );
+
+  /** Kartu ponsel: guru, skor ringkas satu baris, predikat, tombol Nilai. */
+  const kartuKinerja = (b: PenilaianKinerjaBaris) => (
+    <KartuRingkas
+      judul={b.nama_guru}
+      sub={b.mata_pelajaran}
+      detail={[
+        `Skor akhir ${teksSkor(b.skor_akhir)}`,
+        `Kehadiran ${teksSkor(b.skor_kehadiran)}`,
+        `Administrasi ${teksSkor(b.skor_administrasi_avg)}`,
+        `Manajemen ${teksSkor(b.skor_manajemen_avg)}`,
+      ]}
+      lencana={<LencanaPredikat predikat={b.predikat} />}
+      aksi={tombolNilai(b)}
+    />
   );
 
   const label = `${namaBulan(periode.bulan)} ${periode.tahun}`;
@@ -124,12 +147,12 @@ export function PenilaianKinerjaPage() {
         aksi={
           <>
             <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
-              <RefreshCw aria-hidden="true" />
+              <ArrowsClockwiseIcon aria-hidden="true" />
               Sinkronkan skor kehadiran
             </Button>
             <Button asChild size="touch" variant="secondary">
               <a href={urlEkspor('kinerja', periode)} download>
-                <Download aria-hidden="true" />
+                <DownloadSimpleIcon aria-hidden="true" />
                 Ekspor CSV
               </a>
             </Button>
@@ -167,8 +190,9 @@ export function PenilaianKinerjaPage() {
         galat={daftar.isError ? pesanGalat(daftar.error) : null}
         onCobaLagi={() => void daftar.refetch()}
         keterangan={`Penilaian kinerja guru ${label}`}
+        kartuMobile={kartuKinerja}
         kosong={{
-          icon: Award,
+          icon: MedalIcon,
           pesan: cari ? 'Tidak ada guru yang cocok.' : 'Belum ada guru aktif.',
         }}
       />
@@ -259,7 +283,7 @@ function FormNilaiKinerja({
           }),
         )}
       >
-        <div className="rounded-lg bg-subtle px-3 py-2 text-sm">
+        <div className="rounded-kontrol bg-subtle px-3 py-2 text-sm">
           <span className="text-ink-muted">Skor kehadiran (otomatis): </span>
           <strong className="font-semibold text-ink">
             <TeksSkor nilai={baris.skor_kehadiran} />

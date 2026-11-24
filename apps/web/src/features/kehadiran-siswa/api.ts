@@ -1,13 +1,16 @@
-import type {
-  Halaman,
-  HasilSimpanSiswa,
-  LaporanSiswaBaris,
-  Respons,
-  RiwayatSesiSiswa,
-  SesiAbsenSiswa,
-  SimpanKehadiranSiswaInput,
+import {
+  JAM_KE_MAX,
+  JAM_KE_MIN,
+  type Halaman,
+  type HasilSimpanSiswa,
+  type LaporanSiswaBaris,
+  type Respons,
+  type RiwayatSesiSiswa,
+  type SesiAbsenSiswa,
+  type SimpanKehadiranSiswaInput,
 } from '@sms/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { api, qs } from '@/lib/api';
 
 type Param = Record<string, string | number | null | undefined>;
@@ -31,6 +34,28 @@ export function useRiwayatSiswa(params: Param, aktif: boolean) {
     placeholderData: keepPreviousData,
     enabled: aktif,
   });
+}
+
+/**
+ * Jam yang absensi siswanya sudah tersimpan untuk satu kelas pada satu tanggal, dari endpoint
+ * riwayat yang sudah ada (tanpa perubahan API). Tanpa `keepPreviousData` agar tanda "tersimpan"
+ * tanggal sebelumnya tidak sempat tampil di tanggal baru.
+ */
+export function useJamTersimpan(kelasId: number | null, tanggal: string, aktif = true) {
+  const params = {
+    kelas_id: kelasId,
+    tanggal_dari: tanggal,
+    tanggal_sampai: tanggal,
+    page: 1,
+    pageSize: JAM_KE_MAX - JAM_KE_MIN + 1,
+  };
+  const q = useQuery({
+    queryKey: ['kehadiran-siswa', 'riwayat', params],
+    queryFn: () => api.get<Halaman<RiwayatSesiSiswa>>(`/kehadiran-siswa/riwayat${qs(params)}`),
+    enabled: aktif && kelasId !== null && tanggal !== '',
+  });
+  const jam = useMemo(() => q.data?.data.map((r) => r.jam_ke) ?? [], [q.data]);
+  return { ...q, jam };
 }
 
 function useSegarkan() {

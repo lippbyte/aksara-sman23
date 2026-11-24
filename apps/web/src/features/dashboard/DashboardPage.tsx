@@ -1,39 +1,23 @@
-import { TriangleAlert } from 'lucide-react';
+import { WarningIcon } from '@phosphor-icons/react';
 import { EmptyState } from '@/components/EmptyState';
+import { FotoLatar } from '@/components/GambarSekolah';
 import { useAuth, usePengguna } from '@/lib/auth';
 import { DashboardKelasPage } from './DashboardKelasPage';
 import { DashboardPenilaiPage } from './DashboardPenilaiPage';
 import { DashboardRingkasanPage } from './DashboardRingkasanPage';
 
-function urlVarian(baseUrl: string, lebar: 640 | 1280 | 1920, fmt: 'webp' | 'jpeg'): string {
-  const sep = baseUrl.includes('?') ? '&' : '?';
-  return `${baseUrl}${sep}w=${lebar}&fmt=${fmt}`;
-}
-
-/** Lapisan gambar dekoratif bagian atas dashboard yang memudar ke --bg-app (DESIGN §11.3). */
+/**
+ * Lapisan foto dekoratif di bagian atas dashboard (±17.5rem, opasitas 6–10 %, abu-abu) yang
+ * memudar ke --bg-app (DESIGN §11.3). Hanya bila admin mengunggahnya di Pengaturan Sekolah.
+ */
 function LatarDashboard({ url }: { url: string | null | undefined }) {
   if (!url) return null;
   return (
     <div
       aria-hidden="true"
-      className="latar-dashboard-pudar pointer-events-none absolute -inset-x-4 -top-5 z-0 h-[280px] overflow-hidden sm:-inset-x-6 lg:-top-6"
+      className="latar-dashboard-pudar pointer-events-none absolute -inset-x-4 -top-5 z-0 h-70 overflow-hidden sm:-inset-x-6 lg:-top-6"
     >
-      <picture>
-        <source
-          type="image/webp"
-          srcSet={`${urlVarian(url, 640, 'webp')} 640w, ${urlVarian(url, 1280, 'webp')} 1280w, ${urlVarian(url, 1920, 'webp')} 1920w`}
-          sizes="100vw"
-        />
-        <img
-          src={urlVarian(url, 1280, 'jpeg')}
-          srcSet={`${urlVarian(url, 640, 'jpeg')} 640w, ${urlVarian(url, 1280, 'jpeg')} 1280w, ${urlVarian(url, 1920, 'jpeg')} 1920w`}
-          sizes="100vw"
-          alt=""
-          decoding="async"
-          fetchPriority="low"
-          className="h-full w-full scale-105 object-cover opacity-[0.08] grayscale blur-[2px]"
-        />
-      </picture>
+      <FotoLatar url={url} className="scale-105 opacity-10 blur-xs grayscale" />
     </div>
   );
 }
@@ -49,8 +33,10 @@ export function DashboardPage() {
       isi =
         user.kelas_id === null ? (
           <EmptyState
-            icon={TriangleAlert}
-            pesan="Akun Anda belum terikat ke kelas. Hubungi admin."
+            icon={WarningIcon}
+            nada="peringatan"
+            judul="Akun belum terhubung ke kelas"
+            pesan="Sekretaris kelas perlu terhubung ke satu kelas sebelum bisa mencatat. Minta admin mengatur kelas di Pengaturan → Akun."
           />
         ) : (
           <DashboardKelasPage kelasId={user.kelas_id} />

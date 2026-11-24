@@ -1,4 +1,4 @@
-import { RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { ArrowCounterClockwiseIcon, SlidersHorizontalIcon } from '@phosphor-icons/react';
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { cn } from '@/lib/utils';
@@ -97,7 +97,7 @@ export function FilterBar({
       {children}
       {onReset && (
         <Button variant="ghost" size="touch" onClick={onReset} disabled={!adaFilter}>
-          <RotateCcw aria-hidden="true" />
+          <ArrowCounterClockwiseIcon aria-hidden="true" />
           Reset
         </Button>
       )}
@@ -110,7 +110,7 @@ export function FilterBar({
         role="search"
         aria-label="Filter"
         className={cn(
-          'mb-3 flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:flex-wrap sm:items-end',
+          'mb-3 flex flex-col gap-3 rounded-kartu border border-line bg-surface p-3.5 shadow-[var(--shadow-card)] sm:flex-row sm:flex-wrap sm:items-end',
           className,
         )}
       >
@@ -124,7 +124,7 @@ export function FilterBar({
     <>
       <div
         className={cn(
-          'mb-3 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-3',
+          'mb-3 flex flex-wrap items-start gap-3 rounded-kartu border border-line bg-surface p-3.5 shadow-[var(--shadow-card)] md:items-end',
           className,
         )}
       >
@@ -136,7 +136,7 @@ export function FilterBar({
             onClick={() => setLembarBuka(true)}
             aria-expanded={lembarBuka}
           >
-            <SlidersHorizontal aria-hidden="true" />
+            <SlidersHorizontalIcon aria-hidden="true" />
             Filter
             {typeof jumlahAktif === 'number' && jumlahAktif > 0 && (
               <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-2xs font-semibold text-accent tabular-nums">
@@ -151,32 +151,40 @@ export function FilterBar({
           {isiKontrol}
         </div>
 
-        {/* Aksi dirender satu kali, sejajar kanan di mobile maupun desktop */}
-        {aksi && <div className="ml-auto flex flex-wrap items-center gap-2">{aksi}</div>}
+        {/* Aksi dirender satu kali, sejajar kanan. Di ponsel mengisi sisa baris di samping
+            tombol Filter dan baru membungkus bila tidak muat (bukan satu tombol per baris). */}
+        {aksi && (
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-2 md:ml-auto md:flex-none">
+            {aksi}
+          </div>
+        )}
       </div>
 
       {/* Lembar bawah filter hanya dirender saat terbuka agar label tidak ganda di DOM */}
       {lembarBuka && (
-        <Dialog open onOpenChange={setLembarBuka} judul="Filter data">
+        <Dialog
+          open
+          onOpenChange={setLembarBuka}
+          judul="Filter data"
+          deskripsi="Pilihan langsung diterapkan pada daftar."
+        >
           <div className="flex flex-col gap-3">{children}</div>
           <DialogAksi>
             {onReset && (
               <Button
                 variant="secondary"
-                size="touch"
                 disabled={!adaFilter}
                 onClick={() => {
                   onReset();
                   setLembarBuka(false);
                 }}
               >
-                <RotateCcw aria-hidden="true" />
+                <ArrowCounterClockwiseIcon aria-hidden="true" />
                 Reset
               </Button>
             )}
-            <Button size="touch" onClick={() => setLembarBuka(false)}>
-              Terapkan
-            </Button>
+            {/* Filter sudah berlaku saat dipilih; tombol ini hanya kembali ke daftar. */}
+            <Button onClick={() => setLembarBuka(false)}>Lihat hasil</Button>
           </DialogAksi>
         </Dialog>
       )}
@@ -194,10 +202,7 @@ export function FilterItem({ label, className, children }: FilterItemProps) {
   const id = useId();
   return (
     <div className={cn('flex min-w-0 flex-col gap-1 sm:w-44', className)}>
-      <label
-        htmlFor={id}
-        className="text-2xs font-semibold tracking-wider text-ink-subtle uppercase"
-      >
+      <label htmlFor={id} className="text-xs font-medium text-ink-muted">
         {label}
       </label>
       {children(id)}

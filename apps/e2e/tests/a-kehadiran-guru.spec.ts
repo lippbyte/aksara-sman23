@@ -52,15 +52,23 @@ test('sekretaris mencatat kehadiran guru, jam bentrok ditolak, rekap ikut beruba
   await pertama.dialog.getByRole('button', { name: 'Catat kehadiran' }).click();
   await expect(page.getByText('Kehadiran dicatat.')).toBeVisible();
   await expect(pertama.dialog).toBeHidden();
+  const [th, bl, hr] = tanggal.split('-');
   await expect(
-    page.getByRole('button', { name: `Ubah catatan ${pertama.nama} jam ke-${jamGuru}` }),
+    page.getByRole('button', {
+      name: `Ubah catatan ${pertama.nama}, ${hr}/${bl}/${th}, jam ke-${jamGuru}`,
+    }),
   ).toBeVisible();
 
   // 2) Guru, tanggal, dan jam yang sama → ditolak karena bentrok.
   const kedua = await isiForm(page, { tanggal, jam: jamGuru, indeksGuru, guruId: pertama.id });
   await kedua.dialog.getByRole('button', { name: 'Catat kehadiran' }).click();
   await expect(kedua.dialog.getByRole('alert')).toContainText('Jam bentrok');
+  // Form berisi: Batal meminta konfirmasi agar isian tidak terbuang tanpa sengaja.
   await kedua.dialog.getByRole('button', { name: 'Batal' }).click();
+  await page
+    .getByRole('dialog', { name: 'Buang perubahan?' })
+    .getByRole('button', { name: 'Buang perubahan' })
+    .click();
   await expect(kedua.dialog).toBeHidden();
 
   // 3) Rekap pekan guru itu dihitung ulang: jam hadir bertambah 1 JP (bukan 2).

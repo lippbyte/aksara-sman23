@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { APP_NAME, APP_NAME_KUSTOM, APP_SUBTITLE } from '@/lib/config';
 import { pasangApiTiruan, penggunaUji, tampilkanApp } from '@/test/bantuan';
 import { judulHalaman, menuUntuk, NAV_ITEMS } from '../nav';
 
@@ -24,6 +25,16 @@ describe('AppLayout', () => {
     tampilkanApp();
     expect(await screen.findByText('SMA Contoh Fiktif')).toBeInTheDocument();
     expect(screen.getByText('Dikembangkan oleh EDILAKSO · In Development')).toBeInTheDocument();
+  });
+
+  it('halaman masuk menyebut nama produk sekali (satu judul, satu keterangan)', async () => {
+    pasangApiTiruan(null);
+    tampilkanApp('/masuk');
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('AKSARA');
+    // Keterangan mengikuti konfigurasi (VITE_APP_NAME bila diisi sekolah), tidak keduanya.
+    expect(screen.getByText(APP_NAME_KUSTOM ? APP_NAME : APP_SUBTITLE)).toBeInTheDocument();
+    if (!APP_NAME_KUSTOM) expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+    expect(screen.getAllByText('AKSARA')).toHaveLength(1);
   });
 
   it('judul header mengikuti rute dan menu aktif ditandai', async () => {
@@ -110,7 +121,7 @@ describe('menu dan halaman mengikuti peran', () => {
     const fetchTiruan = pasangApiTiruan('sekretaris_kelas');
     tampilkanApp('/pengaturan/guru');
     expect(
-      await screen.findByText('Peran Anda tidak memiliki akses ke halaman ini.'),
+      await screen.findByText('Halaman ini tidak tersedia untuk peran Anda'),
     ).toBeInTheDocument();
     // Halaman tidak dirender, jadi data Pengaturan tidak pernah diminta.
     expect(fetchTiruan.mock.calls.some(([url]) => String(url).includes('/settings/'))).toBe(false);

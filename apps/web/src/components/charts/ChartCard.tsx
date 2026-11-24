@@ -1,4 +1,4 @@
-import { Table2 } from 'lucide-react';
+import { TableIcon } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { Card, CardBody, CardHeader, Skeleton } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -49,12 +49,13 @@ export function ChartCard({
         )}
         {!memuat && (
           <details className="group text-xs">
-            <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 font-medium text-ink-muted hover:text-ink">
-              <Table2 className="size-3.5" aria-hidden="true" />
+            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 font-medium text-ink-muted hover:text-ink pointer-fine:min-h-9">
+              <TableIcon className="size-3.5" aria-hidden="true" />
               <span className="group-open:hidden">Lihat tabel</span>
               <span className="hidden group-open:inline">Sembunyikan tabel</span>
             </summary>
-            <div className="mt-2 overflow-x-auto">
+            {/* `relative` mengurung caption sr-only (absolute) di dalam wadah gulir. */}
+            <div className="relative mt-2 overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <caption className="sr-only">
                   {judul}, {periode}
@@ -133,7 +134,7 @@ interface BarisTooltip {
 /** Isi tooltip: nilai menonjol, nama seri sekunder, penanda garis berwarna. */
 export function KotakTooltip({ judul, baris }: { judul: string; baris: BarisTooltip[] }) {
   return (
-    <div className="min-w-36 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-md">
+    <div className="min-w-36 rounded-kontrol border border-line bg-surface px-3 py-2 text-xs shadow-md">
       <p className="mb-1 font-medium text-ink-muted">{judul}</p>
       <ul className="flex flex-col gap-0.5">
         {baris.map((b) => (

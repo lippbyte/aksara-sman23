@@ -1,6 +1,7 @@
 import { STATUS_SISWA, type LaporanSiswaBaris, type StatusSiswa } from '@sms/shared';
-import { Download, FileText } from 'lucide-react';
+import { DownloadSimpleIcon, FileTextIcon } from '@phosphor-icons/react';
 import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
+import { KartuRingkas } from '@/components/KartuRingkas';
 import { FilterBar, FilterItem, useFilterUrl } from '@/components/FilterBar';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
@@ -16,6 +17,20 @@ const LABEL: Record<StatusSiswa, string> = {
   sakit: 'Sakit',
   alpa: 'Alpa',
 };
+
+/** Kartu ponsel: siswa, NIS · kelas, jumlah per status dalam satu baris. */
+function kartuLaporan(b: LaporanSiswaBaris) {
+  return (
+    <KartuRingkas
+      judul={b.nama_siswa}
+      sub={`NIS ${b.nis} · Kelas ${b.nama_kelas}`}
+      detail={[
+        ...STATUS_SISWA.map((st) => `${LABEL[st]} ${angka(b[st])}`),
+        `Total ${angka(b.total)}`,
+      ]}
+    />
+  );
+}
 
 const kolom: Kolom<LaporanSiswaBaris>[] = [
   { id: 'nis', judul: 'NIS', sel: (b) => b.nis },
@@ -49,13 +64,13 @@ export function LaporanSiswaPage() {
 
   const tombolEkspor = rentangSalah ? (
     <Button size="touch" variant="secondary" disabled>
-      <Download aria-hidden="true" />
+      <DownloadSimpleIcon aria-hidden="true" />
       Ekspor CSV
     </Button>
   ) : (
     <Button asChild size="touch" variant="secondary">
       <a href={urlEksporLaporanSiswa(f.nilai)} download>
-        <Download aria-hidden="true" />
+        <DownloadSimpleIcon aria-hidden="true" />
         Ekspor CSV
       </a>
     </Button>
@@ -148,8 +163,9 @@ export function LaporanSiswaPage() {
         }
         onCobaLagi={rentangSalah ? undefined : () => void laporan.refetch()}
         keterangan="Laporan rekap kehadiran siswa"
+        kartuMobile={kartuLaporan}
         kosong={{
-          icon: FileText,
+          icon: FileTextIcon,
           pesan: f.adaFilter
             ? 'Tidak ada siswa yang cocok dengan filter.'
             : 'Belum ada data siswa.',

@@ -1,5 +1,5 @@
 import type { Role } from '@sms/shared';
-import { ShieldX } from 'lucide-react';
+import { ShieldWarningIcon } from '@phosphor-icons/react';
 import type { ReactNode } from 'react';
 import { Link, Navigate, useLocation } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
@@ -40,8 +40,10 @@ export function PerluPeran({ roles, children }: { roles: readonly Role[]; childr
   if (!user || !roles.includes(user.role)) {
     return (
       <EmptyState
-        icon={ShieldX}
-        pesan="Peran Anda tidak memiliki akses ke halaman ini."
+        icon={ShieldWarningIcon}
+        nada="peringatan"
+        judul="Halaman ini tidak tersedia untuk peran Anda"
+        pesan="Menu yang bisa Anda buka ada di navigasi. Bila Anda memerlukan akses ini, hubungi admin sekolah."
         aksi={
           <Button asChild variant="secondary">
             <Link to="/">Kembali ke Dashboard</Link>

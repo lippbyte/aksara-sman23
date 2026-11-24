@@ -8,7 +8,9 @@ test('admin: unduh templat CSV, pratinjau & impor guru fiktif dengan konfirmasi 
 }, info) => {
   await masuk(page, AKUN.admin);
   await page.goto('/pengaturan/impor');
-  await expect(page.getByRole('heading', { name: 'Impor data master (CSV UTF-8)' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Impor data master (Excel .xlsx / CSV)' }),
+  ).toBeVisible();
 
   // 1) Unduh templat CSV kosong.
   const [unduhan] = await Promise.all([
@@ -22,7 +24,14 @@ test('admin: unduh templat CSV, pratinjau & impor guru fiktif dengan konfirmasi 
     'kode_guru,nip,nama_guru,mata_pelajaran,jabatan,nama_mgmp,status',
   );
 
-  // 2) Unggah berkas CSV fiktif → pratinjau menampilkan 1 guru baru + 1 MGMP baru.
+  // 2) Unduh templat Excel (.xlsx) kosong.
+  const [unduhanXlsx] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('link', { name: 'Unduh templat Excel (.xlsx)' }).click(),
+  ]);
+  expect(unduhanXlsx.suggestedFilename()).toBe('templat-impor-guru.xlsx');
+
+  // 3) Unggah berkas CSV fiktif → pratinjau menampilkan 1 guru baru + 1 MGMP baru.
   const kode = info.project.name === 'ponsel-360' ? 'GE2E1' : 'GE2E2';
   const namaMgmp = info.project.name === 'ponsel-360' ? 'MGMP Uji E2E M' : 'MGMP Uji E2E D';
   const csvFiktif = [
@@ -30,7 +39,7 @@ test('admin: unduh templat CSV, pratinjau & impor guru fiktif dengan konfirmasi 
     `${kode},,Guru E2E Fiktif ${kode},Informatika,Guru Mapel,${namaMgmp},aktif`,
   ].join('\r\n');
 
-  await page.getByLabel('Pilih berkas CSV Guru').setInputFiles({
+  await page.getByLabel('Pilih berkas Excel atau CSV Guru').setInputFiles({
     name: 'guru-fiktif.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from(csvFiktif, 'utf8'),

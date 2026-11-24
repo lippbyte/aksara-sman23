@@ -3,7 +3,13 @@ import { cn } from '@/lib/utils';
 
 export function Card({ className, ...props }: ComponentProps<'section'>) {
   return (
-    <section className={cn('rounded-xl border border-line bg-surface', className)} {...props} />
+    <section
+      className={cn(
+        'kartu-kontainer rounded-kartu border border-line bg-surface shadow-[var(--shadow-card)]',
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
@@ -18,12 +24,12 @@ export function CardHeader({ judul, keterangan, aksi, className }: CardHeaderPro
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-2 border-b border-line-soft px-4 py-3 sm:px-5',
+        'flex flex-wrap items-center justify-between gap-2.5 border-b border-line-soft px-4 py-3.5 sm:px-5',
         className,
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-sm font-semibold text-ink">{judul}</h2>
+        <h2 className="text-base font-semibold text-ink">{judul}</h2>
         {keterangan && <p className="mt-0.5 text-xs text-ink-subtle">{keterangan}</p>}
       </div>
       {aksi && <div className="flex flex-wrap items-center gap-2">{aksi}</div>}
@@ -39,7 +45,10 @@ export function Skeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
       aria-hidden="true"
-      className={cn('animate-pulse rounded-md bg-subtle', className)}
+      className={cn(
+        'animate-pulse rounded-kontrol bg-subtle motion-reduce:animate-none',
+        className,
+      )}
       {...props}
     />
   );

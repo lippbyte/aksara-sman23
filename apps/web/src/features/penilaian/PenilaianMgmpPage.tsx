@@ -1,11 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { skorSchema, teksOpsional, type PenilaianMgmpBaris, type Periode } from '@sms/shared';
-import { ClipboardPen, Download, RefreshCw, School, UsersRound } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  ArrowsClockwiseIcon,
+  ChalkboardIcon,
+  DownloadSimpleIcon,
+  NotePencilIcon,
+  UsersThreeIcon,
+} from '@phosphor-icons/react';
+import { useCallback, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import { DataTable, type Kolom } from '@/components/DataTable';
+import { KartuRingkas } from '@/components/KartuRingkas';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog, Dialog, DialogAksi } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
@@ -27,6 +34,7 @@ import {
   keSkor,
   LencanaPredikat,
   TeksSkor,
+  teksSkor,
   usePeriodeUrl,
 } from './komponen';
 
@@ -59,6 +67,51 @@ export function PenilaianMgmpPage() {
   const bolehIsi = admin || jendela?.terbuka === true;
   const label = `${namaBulan(periode.bulan)} ${periode.tahun}`;
 
+  const tombolSekretaris = useCallback(
+    (b: PenilaianMgmpBaris) => (
+      <Button
+        variant="ghost"
+        size="touch"
+        disabled={!bolehIsi}
+        aria-label={`Isi skor siswa MGMP ${b.nama_mapel}`}
+        onClick={() => setSkorKelas(b)}
+      >
+        <NotePencilIcon aria-hidden="true" />
+        Isi skor siswa
+      </Button>
+    ),
+    [bolehIsi],
+  );
+
+  const tombolPengelola = useCallback(
+    (b: PenilaianMgmpBaris) => (
+      <div className="flex justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-h-11 md:min-h-0"
+          aria-label={`Skor siswa per kelas MGMP ${b.nama_mapel}`}
+          onClick={() => setSkorKelas(b)}
+        >
+          <ChalkboardIcon aria-hidden="true" />
+          Per kelas
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="min-h-11 md:min-h-0"
+          disabled={!bolehIsi}
+          aria-label={`Nilai MGMP ${b.nama_mapel}`}
+          onClick={() => setDinilai(b)}
+        >
+          <NotePencilIcon aria-hidden="true" />
+          Nilai
+        </Button>
+      </div>
+    ),
+    [bolehIsi],
+  );
+
   const kolom = useMemo<Kolom<PenilaianMgmpBaris>[]>(() => {
     const mgmp: Kolom<PenilaianMgmpBaris> = {
       id: 'mgmp',
@@ -76,23 +129,7 @@ export function PenilaianMgmpPage() {
           sel: (b) => <TeksSkor nilai={b.skor_kelas_saya} />,
         },
         { id: 'terisi', judul: 'Sudah mengisi', sel: (b) => <KelasMengisi b={b} /> },
-        {
-          id: 'aksi',
-          judul: 'Aksi',
-          aksi: true,
-          sel: (b) => (
-            <Button
-              variant="ghost"
-              size="touch"
-              disabled={!bolehIsi}
-              aria-label={`Isi skor siswa MGMP ${b.nama_mapel}`}
-              onClick={() => setSkorKelas(b)}
-            >
-              <ClipboardPen aria-hidden="true" />
-              Isi skor siswa
-            </Button>
-          ),
-        },
+        { id: 'aksi', judul: 'Aksi', aksi: true, sel: tombolSekretaris },
       ];
     }
     return [
@@ -132,48 +169,55 @@ export function PenilaianMgmpPage() {
         ),
       },
       { id: 'predikat', judul: 'Predikat', sel: (b) => <LencanaPredikat predikat={b.predikat} /> },
-      {
-        id: 'aksi',
-        judul: 'Aksi',
-        aksi: true,
-        sel: (b) => (
-          <div className="flex justify-end gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-h-11 md:min-h-0"
-              aria-label={`Skor siswa per kelas MGMP ${b.nama_mapel}`}
-              onClick={() => setSkorKelas(b)}
-            >
-              <School aria-hidden="true" />
-              Per kelas
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="min-h-11 md:min-h-0"
-              disabled={!bolehIsi}
-              aria-label={`Nilai MGMP ${b.nama_mapel}`}
-              onClick={() => setDinilai(b)}
-            >
-              <ClipboardPen aria-hidden="true" />
-              Nilai
-            </Button>
-          </div>
-        ),
-      },
+      { id: 'aksi', judul: 'Aksi', aksi: true, sel: tombolPengelola },
     ];
-  }, [bolehIsi, sekretaris, user.nama_kelas]);
+  }, [sekretaris, user.nama_kelas, tombolSekretaris, tombolPengelola]);
+
+  /**
+   * Kartu ponsel. Tombol aksi di baris bawah (bukan kolom kanan) karena berlabel teks:
+   * di kolom kanan judul MGMP akan terjepit.
+   */
+  const kartuMgmp = (b: PenilaianMgmpBaris) =>
+    sekretaris ? (
+      <KartuRingkas
+        judul={b.nama_mapel}
+        detail={[`Skor siswa ${user.nama_kelas ?? 'kelas Anda'} ${teksSkor(b.skor_kelas_saya)}`]}
+        bawah={
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
+            <KelasMengisi b={b} />
+            {tombolSekretaris(b)}
+          </div>
+        }
+      />
+    ) : (
+      <KartuRingkas
+        judul={b.nama_mapel}
+        sub={`${angka(b.jumlah_guru_aktif)} guru aktif`}
+        detail={[
+          `Skor akhir ${teksSkor(b.skor_akhir)}`,
+          `Kehadiran ${teksSkor(b.skor_kehadiran)}`,
+          `Siswa ${teksSkor(b.skor_siswa)}`,
+          `Administrasi ${teksSkor(b.skor_administrasi)}`,
+        ]}
+        lencana={<LencanaPredikat predikat={b.predikat} />}
+        bawah={
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
+            <KelasMengisi b={b} />
+            {tombolPengelola(b)}
+          </div>
+        }
+      />
+    );
 
   const aksiPanel = !sekretaris ? (
     <>
       <Button size="touch" variant="secondary" onClick={() => setKonfirmasi(true)}>
-        <RefreshCw aria-hidden="true" />
+        <ArrowsClockwiseIcon aria-hidden="true" />
         Sinkronkan skor otomatis
       </Button>
       <Button asChild size="touch" variant="secondary">
         <a href={urlEkspor('mgmp', periode)} download>
-          <Download aria-hidden="true" />
+          <DownloadSimpleIcon aria-hidden="true" />
           Ekspor CSV
         </a>
       </Button>
@@ -212,8 +256,9 @@ export function PenilaianMgmpPage() {
         onCobaLagi={() => void daftar.refetch()}
         keterangan={`Penilaian MGMP ${label}`}
         barisSkeleton={3}
+        kartuMobile={kartuMgmp}
         kosong={{
-          icon: UsersRound,
+          icon: UsersThreeIcon,
           pesan: sekretaris
             ? `Belum ada MGMP yang gurunya mengajar di kelas ${user.nama_kelas ?? 'Anda'}.`
             : 'Belum ada MGMP.',
@@ -315,7 +360,7 @@ function FormNilaiMgmp({
       deskripsi={`${namaBulan(periode.bulan)} ${periode.tahun} · Skor 0–100, paling banyak dua desimal.`}
     >
       <form noValidate className="flex flex-col gap-4" onSubmit={form.handleSubmit(kirim)}>
-        <dl className="grid grid-cols-2 gap-2 rounded-lg bg-subtle px-3 py-2 text-sm">
+        <dl className="grid grid-cols-2 gap-2 rounded-kontrol bg-subtle px-3 py-2 text-sm">
           <div>
             <dt className="text-ink-muted">Skor kehadiran (otomatis)</dt>
             <dd className="font-semibold text-ink">
@@ -437,7 +482,7 @@ function DialogSkorSiswa({
               {pesanGalat(rincian.error)}
             </p>
           ) : (
-            <div className="max-h-56 overflow-y-auto rounded-lg border border-line">
+            <div className="max-h-56 overflow-y-auto rounded-kontrol border border-line">
               <table className="w-full text-sm">
                 <caption className="sr-only">Skor siswa per kelas</caption>
                 <thead className="bg-subtle text-left text-xs text-ink-muted">

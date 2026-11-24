@@ -14,7 +14,7 @@ test('sekretaris mengabsen siswa kelasnya secara massal; riwayat tampil; kelas l
   // Sekretaris tidak memilih kelas: langsung kelasnya sendiri.
   await expect(page.getByRole('combobox', { name: 'Kelas' })).toHaveCount(0);
   await expect(page.getByText(`Kelas X-1 · Jam ke-${jamSiswa}`)).toBeVisible();
-  await expect(page.getByText('Sesi ini belum diisi.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Belum diisi', { exact: true })).toBeVisible();
 
   // Semua siswa bawaan "Hadir"; satu diubah menjadi "Sakit", lalu simpan sekaligus.
   const statusPertama = page.getByRole('radiogroup', { name: /^Status / }).first();
@@ -26,7 +26,8 @@ test('sekretaris mengabsen siswa kelasnya secara massal; riwayat tampil; kelas l
   ).toBeVisible();
 
   // Riwayat: sesi baru tercatat (dicek juga lewat API dengan sesi pengguna yang sama).
-  const riwayat = page.getByRole('region', { name: 'Riwayat absensi' });
+  // `exact`: wadah gulir tabelnya juga region ("Riwayat absensi siswa per tanggal").
+  const riwayat = page.getByRole('region', { name: 'Riwayat absensi', exact: true });
   await expect(riwayat).toContainText(tanggalPendek(tanggal));
   const res = await page.request.get('/api/v1/kehadiran-siswa/riwayat?page=1&pageSize=50');
   expect(res.status()).toBe(200);

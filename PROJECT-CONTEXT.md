@@ -15,7 +15,7 @@ Aplikasi web untuk **mencatat dan merekap kehadiran guru di kelas dan kehadiran 
 - **Status: In Development.** Implementasi awal (prototype Laravel) sudah ada. Proyek ini adalah **pembangunan ulang** dengan tech stack baru, UI/UX baru, dan dashboard visual.
 - **Belum pernah dicoba di sekolah nyata.** Demo dan pengembangan **hanya memakai data contoh (fiktif)**.
 - Produk di bawah **EDILAKSO**, startup produk digital dan inovasi yang dikembangkan tim empat founder. Bukan "studio", bukan "perusahaan".
-- Nama final produk belum ditetapkan. Di UI pakai nama kerja yang mudah diganti dari konfigurasi.
+- Nama produk: **AKSARA** (Administrasi & Sistem Informasi Sekolah) `[TIM: 24 Nov 2026]`. Nama lengkap tetap dari konfigurasi (`VITE_APP_NAME`) agar mudah diganti.
 
 ## 2. Tujuan pembangunan ulang
 
@@ -215,7 +215,7 @@ Semua skor 0–100, dua desimal. Pembulatan hanya pada nilai akhir yang disimpan
 
 ## 12. Open items `[PERLU DIKONFIRMASI]`
 
-1. Nama final produk, tagline publik, logo, dan identitas visual produk.
+1. ~~Nama final produk~~ AKSARA dan palet biru sudah ditetapkan `[TIM: 24 Nov 2026]` (DESIGN §12). Masih terbuka: tagline publik dan logo produk.
 2. Kebutuhan mode gelap pada versi pertama atau ditunda.
 3. Fitur tambahan dari diskusi tim.
 4. Skor observasi dari modul Performance lama: dibuang atau dipertahankan?

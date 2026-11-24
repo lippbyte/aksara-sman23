@@ -1,5 +1,5 @@
 import type { JendelaPenilaian, PekanSebagian, Periode, RentangPekan } from '@sms/shared';
-import { CalendarClock, Info, TriangleAlert } from 'lucide-react';
+import { CalendarDotsIcon, InfoIcon, WarningIcon } from '@phosphor-icons/react';
 import { Link, useSearchParams } from 'react-router';
 import { FilterBar, FilterItem } from '@/components/FilterBar';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -60,43 +60,55 @@ export function PanelPeriodePenilaian({
   aksi?: React.ReactNode;
 }) {
   return (
-    <div className="mb-3 overflow-hidden rounded-xl border border-line bg-surface">
+    <div className="mb-3 overflow-hidden rounded-kartu border border-line bg-surface shadow-[var(--shadow-card)]">
       <div
         role="search"
         aria-label="Filter periode penilaian"
         className="flex flex-col gap-3 p-3 sm:flex-row sm:flex-wrap sm:items-end"
       >
-        <FilterItem label="Bulan" className="sm:w-40">
-          {(id) => (
-            <Select id={id} value={periode.bulan} onChange={(e) => onUbah('bulan', e.target.value)}>
-              {Array.from({ length: 12 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {namaBulan(i + 1)}
-                </option>
-              ))}
-            </Select>
-          )}
-        </FilterItem>
-        <FilterItem label="Tahun" className="sm:w-28">
-          {(id) => (
-            <Input
-              id={id}
-              type="number"
-              inputMode="numeric"
-              min={2000}
-              max={2100}
-              value={periode.tahun}
-              onChange={(e) => onUbah('tahun', e.target.value)}
-            />
-          )}
-        </FilterItem>
+        {/* Ponsel: Bulan dan Tahun berdampingan (isian pendek); ≥ 640 px ikut baris filter. */}
+        <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-3 sm:contents">
+          <FilterItem label="Bulan" className="sm:w-40">
+            {(id) => (
+              <Select
+                id={id}
+                value={periode.bulan}
+                onChange={(e) => onUbah('bulan', e.target.value)}
+              >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {namaBulan(i + 1)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </FilterItem>
+          <FilterItem label="Tahun" className="sm:w-28">
+            {(id) => (
+              <Input
+                id={id}
+                type="number"
+                inputMode="numeric"
+                min={2000}
+                max={2100}
+                value={periode.tahun}
+                onChange={(e) => onUbah('tahun', e.target.value)}
+              />
+            )}
+          </FilterItem>
+        </div>
         {children}
-        {aksi && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{aksi}</div>}
+        {/* Ponsel: tombol berbagi baris bila muat; ≥ 640 px rata kanan. */}
+        {aksi && (
+          <div className="flex flex-wrap items-center gap-2 *:flex-1 sm:ml-auto sm:*:flex-none">
+            {aksi}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 border-t border-line-soft bg-app/60 px-3.5 py-2.5 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-2.5">
-          <CalendarClock className="mt-0.5 size-4 shrink-0 text-icon-muted" aria-hidden="true" />
+          <CalendarDotsIcon className="mt-0.5 size-4 shrink-0 text-icon-muted" aria-hidden="true" />
           <div className="min-w-0">
             <p className="text-xs font-medium text-ink">
               Jendela penilaian {namaBulan(periode.bulan)} {periode.tahun}
@@ -114,7 +126,7 @@ export function PanelPeriodePenilaian({
               )}
             </p>
             <p className="mt-0.5 flex items-center gap-1 text-xs text-ink-subtle">
-              <Info className="size-3.5 shrink-0" aria-hidden="true" />
+              <InfoIcon className="size-3.5 shrink-0" aria-hidden="true" />
               Aspek dan bobot mengikuti ketentuan sekolah.
             </p>
           </div>
@@ -180,9 +192,9 @@ interface InfoJendelaProps {
 /** Info jendela pengisian (§6.4) + teks penjelas wajib (Fase 6). */
 export function InfoJendela({ jendela, periode, admin }: InfoJendelaProps) {
   return (
-    <div className="mb-3 flex flex-col gap-2 rounded-xl border border-line bg-surface p-4 text-sm sm:flex-row sm:items-start sm:justify-between">
+    <div className="mb-3 flex flex-col gap-2 rounded-kartu border border-line bg-surface p-4 text-sm sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
-        <CalendarClock className="mt-0.5 size-[18px] shrink-0 text-icon-muted" aria-hidden="true" />
+        <CalendarDotsIcon className="mt-0.5 size-4.5 shrink-0 text-icon-muted" aria-hidden="true" />
         <div>
           <p className="font-medium text-ink">
             Jendela penilaian {namaBulan(periode.bulan)} {periode.tahun}
@@ -200,7 +212,7 @@ export function InfoJendela({ jendela, periode, admin }: InfoJendelaProps) {
             <p className="text-xs text-ink-subtle">Memuat…</p>
           )}
           <p className="mt-1 flex items-center gap-1 text-xs text-ink-subtle">
-            <Info className="size-3.5 shrink-0" aria-hidden="true" />
+            <InfoIcon className="size-3.5 shrink-0" aria-hidden="true" />
             Aspek dan bobot mengikuti ketentuan sekolah.
           </p>
         </div>
@@ -246,9 +258,9 @@ export function PeringatanPekan({
   return (
     <div
       role="status"
-      className="mb-3 flex items-start gap-3 rounded-xl border border-line bg-izin-soft p-4 text-sm"
+      className="mb-3 flex items-start gap-3 rounded-kartu border border-line bg-peringatan-soft p-4 text-sm"
     >
-      <TriangleAlert className="mt-0.5 size-[18px] shrink-0 text-izin" aria-hidden="true" />
+      <WarningIcon className="mt-0.5 size-4.5 shrink-0 text-peringatan" aria-hidden="true" />
       <div className="flex flex-col gap-1">
         <p className="font-medium text-ink">{judulPeringatanPekan(nBelum, nSebagian)}</p>
         <ul className="text-xs text-ink-muted">
@@ -287,6 +299,13 @@ export function TeksSkor({ nilai }: { nilai: number | null }) {
       {nilai.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
     </span>
   );
+}
+
+/** Skor sebagai teks polos (kartu ponsel): format sama dengan `TeksSkor`. */
+export function teksSkor(nilai: number | null): string {
+  return nilai === null
+    ? '—'
+    : nilai.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export function LencanaPredikat({ predikat }: { predikat: string | null }) {

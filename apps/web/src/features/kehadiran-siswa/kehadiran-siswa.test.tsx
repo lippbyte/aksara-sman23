@@ -42,12 +42,12 @@ describe('Absensi Siswa', () => {
     expect(await screen.findByText('Kelas X-1 · Jam ke-1')).toBeInTheDocument();
     // Sekretaris tidak memilih kelas.
     expect(screen.queryByLabelText('Kelas')).not.toBeInTheDocument();
-    expect(screen.getByText(/Semua siswa ditandai Hadir/)).toBeInTheDocument();
-    expect(screen.getByText('Hadir: 3')).toBeInTheDocument();
+    expect(screen.getByText(/Semua siswa bawaan Hadir/)).toBeInTheDocument();
+    expect(screen.getByText('Hadir 3')).toBeInTheDocument();
 
     const grup = screen.getByRole('radiogroup', { name: 'Status Siswa Contoh X-1 02' });
     fireEvent.click(within(grup).getByRole('radio', { name: 'Sakit' }));
-    expect(screen.getByText('Sakit: 1')).toBeInTheDocument();
+    expect(screen.getByText('Sakit 1')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Keterangan Siswa Contoh X-1 02'), {
       target: { value: 'Demam (contoh)' },
     });
@@ -75,9 +75,9 @@ describe('Absensi Siswa', () => {
     tampilkanApp('/absensi-siswa');
     const grup = await screen.findByRole('radiogroup', { name: 'Status Siswa Contoh X-1 01' });
     fireEvent.click(within(grup).getByRole('radio', { name: 'Alpa' }));
-    expect(screen.getByText('Alpa: 1')).toBeInTheDocument();
+    expect(screen.getByText('Alpa 1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Tandai semua hadir' }));
-    expect(screen.getByText('Hadir: 3')).toBeInTheDocument();
+    expect(screen.getByText('Hadir 3')).toBeInTheDocument();
   });
 
   it('manajemen_guru hanya melihat: status terkunci dan tidak ada tombol simpan', async () => {
@@ -92,16 +92,158 @@ describe('Absensi Siswa', () => {
   it('admin tanpa kelas terpilih diminta memilih kelas; guru_penilai tidak punya akses', async () => {
     pasangApiTiruan('admin', penjawab());
     const { unmount } = tampilkanApp('/absensi-siswa');
-    expect(
-      await screen.findByText('Pilih kelas untuk menampilkan daftar siswa.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Pilih kelas dulu')).toBeInTheDocument();
     unmount();
 
     pasangApiTiruan('guru_penilai', penjawab());
     tampilkanApp('/absensi-siswa');
     expect(
-      await screen.findByText('Peran Anda tidak memiliki akses ke halaman ini.'),
+      await screen.findByText('Halaman ini tidak tersedia untuk peran Anda'),
     ).toBeInTheDocument();
+  });
+
+  const terpilih = (nama: string, status: string) =>
+    within(screen.getByRole('radiogroup', { name: `Status ${nama}` })).getByRole('radio', {
+      name: status,
+    });
+
+  it('isian yang belum disimpan tidak hilang saat data dimuat ulang; baris lain ikut server (C2)', async () => {
+    let sesiServer: SesiAbsenSiswa = SESI;
+    pasangApiTiruan('sekretaris_kelas', (url, init) =>
+      url.includes('/kehadiran-siswa/sesi') && init?.method !== 'PUT'
+        ? { body: { data: sesiServer } }
+        : penjawab()(url, init),
+    );
+    const { client } = tampilkanApp('/absensi-siswa?tanggal=2026-11-16');
+
+    await screen.findByText('Kelas X-1 · Jam ke-1');
+    fireEvent.click(terpilih('Siswa Contoh X-1 02', 'Alpa'));
+    expect(screen.getByText('1 perubahan belum disimpan.')).toBeInTheDocument();
+
+    // Perangkat lain menyimpan siswa 03 sebagai Izin, lalu data dimuat ulang (mis. sambung ulang).
+    sesiServer = {
+      ...SESI,
+      sudah_diisi: true,
+      siswa: SESI.siswa.map((s) => (s.siswa_id === 3 ? { ...s, status: 'izin' as const } : s)),
+    };
+    await client.invalidateQueries({ queryKey: ['kehadiran-siswa'] });
+
+    await waitFor(() =>
+      expect(terpilih('Siswa Contoh X-1 03', 'Izin')).toHaveAttribute('aria-checked', 'true'),
+    );
+    expect(terpilih('Siswa Contoh X-1 02', 'Alpa')).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('1 perubahan belum disimpan.')).toBeInTheDocument();
+  });
+
+  it('mengganti tanggal saat ada perubahan meminta konfirmasi lebih dulu', async () => {
+    pasangApiTiruan('sekretaris_kelas', penjawab());
+    const { router } = tampilkanApp('/absensi-siswa?tanggal=2026-11-16');
+    await screen.findByText('Kelas X-1 · Jam ke-1');
+    fireEvent.click(terpilih('Siswa Contoh X-1 01', 'Sakit'));
+
+    fireEvent.change(screen.getByLabelText('Tanggal'), { target: { value: '2026-11-17' } });
+    const tanya = await screen.findByRole('dialog', {
+      name: 'Tinggalkan absensi yang belum disimpan?',
+    });
+    fireEvent.click(within(tanya).getByRole('button', { name: 'Tetap di sini' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(router.state.location.search).toBe('?tanggal=2026-11-16');
+    expect(terpilih('Siswa Contoh X-1 01', 'Sakit')).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.change(screen.getByLabelText('Tanggal'), { target: { value: '2026-11-17' } });
+    const tanyaLagi = await screen.findByRole('dialog', {
+      name: 'Tinggalkan absensi yang belum disimpan?',
+    });
+    fireEvent.click(within(tanyaLagi).getByRole('button', { name: 'Buang perubahan' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?tanggal=2026-11-17'));
+  });
+
+  it('pemilih jam menandai jam tersimpan dan mapel terjadwal; memilih jam mengubah URL', async () => {
+    pasangApiTiruan('sekretaris_kelas', (url, init) => {
+      if (url.includes('/kehadiran-siswa/riwayat') && url.includes('tanggal_dari=2026-11-16')) {
+        return {
+          body: {
+            data: [
+              {
+                tanggal: '2026-11-16',
+                jam_ke: 1,
+                kelas_id: 7,
+                nama_kelas: 'X-1',
+                hadir: 3,
+                izin: 0,
+                sakit: 0,
+                alpa: 0,
+                total: 3,
+              },
+            ],
+            meta: { page: 1, pageSize: 13, total: 1 },
+          },
+        };
+      }
+      if (url.includes('/kehadiran/jadwal')) {
+        return {
+          body: {
+            data: [
+              {
+                guru_id: 3,
+                kode_guru: 'G03',
+                nama_guru: 'Guru Contoh 03',
+                mata_pelajaran: 'Fisika',
+                jam_ke: 1,
+                total_jam_mengajar: 2,
+                sudah_dicatat: true,
+              },
+            ],
+          },
+        };
+      }
+      return penjawab()(url, init);
+    });
+    const { router } = tampilkanApp('/absensi-siswa?tanggal=2026-11-16');
+    const grupJam = await screen.findByRole('radiogroup', { name: 'Jam ke-' });
+    expect(
+      await within(grupJam).findByRole('radio', { name: 'Jam ke-1, Fisika, sudah tersimpan' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(within(grupJam).getByRole('radio', { name: 'Jam ke-2, Fisika' })).toBeInTheDocument();
+    // Mapel jam ini ikut tampil di kepala sesi (hanya petunjuk, keputusan D7 opsi a).
+    expect(await screen.findByText(/Senin, 16 Nov 2026 · Fisika/)).toBeInTheDocument();
+
+    fireEvent.click(within(grupJam).getByRole('radio', { name: 'Jam ke-3' }));
+    await waitFor(() => expect(router.state.location.search).toBe('?tanggal=2026-11-16&jam_ke=3'));
+  });
+
+  it('setelah tersimpan, bar simpan menawarkan lanjut ke jam berikutnya', async () => {
+    let sudahDisimpan = false;
+    pasangApiTiruan('sekretaris_kelas', (url, init) => {
+      if (url.includes('/kehadiran-siswa/sesi') && init?.method === 'PUT') sudahDisimpan = true;
+      if (url.includes('/kehadiran-siswa/sesi') && init?.method !== 'PUT') {
+        return { body: { data: { ...SESI, sudah_diisi: sudahDisimpan } } };
+      }
+      return penjawab()(url, init);
+    });
+    const { router } = tampilkanApp('/absensi-siswa?tanggal=2026-11-16');
+    await screen.findByText('Kelas X-1 · Jam ke-1');
+    expect(screen.getByText('Belum diisi')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Simpan absensi' }));
+    const lanjut = await screen.findByRole('button', { name: 'Lanjut ke jam ke-2' });
+    expect(screen.getByText('Absensi jam ini tersimpan.')).toBeInTheDocument();
+    expect(screen.getByText('Tersimpan')).toBeInTheDocument();
+
+    fireEvent.click(lanjut);
+    await waitFor(() => expect(router.state.location.search).toBe('?tanggal=2026-11-16&jam_ke=2'));
+  });
+
+  it('"Tandai semua hadir" bisa diurungkan', async () => {
+    pasangApiTiruan('sekretaris_kelas', penjawab());
+    tampilkanApp('/absensi-siswa');
+    await screen.findByText('Kelas X-1 · Jam ke-1');
+    fireEvent.click(terpilih('Siswa Contoh X-1 01', 'Alpa'));
+    fireEvent.click(screen.getByRole('button', { name: 'Tandai semua hadir' }));
+    expect(screen.getByText('Hadir 3')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Urungkan' }));
+    expect(await screen.findByText('Alpa 1')).toBeInTheDocument();
   });
 });
 
@@ -147,7 +289,7 @@ describe('Laporan Rekap Siswa', () => {
     pasangApiTiruan('sekretaris_kelas');
     tampilkanApp('/laporan-siswa');
     expect(
-      await screen.findByText('Peran Anda tidak memiliki akses ke halaman ini.'),
+      await screen.findByText('Halaman ini tidak tersedia untuk peran Anda'),
     ).toBeInTheDocument();
   });
 });

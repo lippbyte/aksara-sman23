@@ -40,8 +40,18 @@ const SUMBU = {
   axisLine: { stroke: WARNA.sumbu },
 } as const;
 
-/** Kehadiran guru hari ini per kelas: bar bertumpuk JP per status. */
-export function GrafikKehadiranKelas({ data }: { data: KehadiranKelasHariIni[] }) {
+/**
+ * Kehadiran guru hari ini per kelas: bar bertumpuk JP per status. `horizontal` untuk layar
+ * sempit: nama kelas di sumbu Y sehingga tidak bertabrakan (audit H5; sebelumnya `interval={0}`
+ * memaksa semua label X tampil berdempet di ponsel).
+ */
+export function GrafikKehadiranKelas({
+  data,
+  horizontal = false,
+}: {
+  data: KehadiranKelasHariIni[];
+  horizontal?: boolean;
+}) {
   const animasi = useAnimasiGrafik();
   const seri = [
     { kunci: 'Hadir' as const, warna: WARNA.hadir },
@@ -51,13 +61,31 @@ export function GrafikKehadiranKelas({ data }: { data: KehadiranKelasHariIni[] }
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart
+        // Grafik disembunyikan dari pembaca layar (tabel alternatif di ChartCard); lapisan
+        // aksesibilitas Recharts membuatnya bisa difokus → axe aria-hidden-focus.
+        accessibilityLayer={false}
         data={data}
-        margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
+        layout={horizontal ? 'vertical' : 'horizontal'}
+        margin={
+          horizontal
+            ? { top: 0, right: 12, bottom: 0, left: 0 }
+            : { top: 8, right: 8, bottom: 0, left: -16 }
+        }
         barCategoryGap="30%"
       >
-        <CartesianGrid vertical={false} stroke={WARNA.garisBantu} />
-        <XAxis dataKey="nama_kelas" {...SUMBU} interval={0} />
-        <YAxis {...SUMBU} axisLine={false} allowDecimals={false} />
+        {horizontal ? (
+          <>
+            <CartesianGrid horizontal={false} stroke={WARNA.garisBantu} />
+            <XAxis type="number" allowDecimals={false} {...SUMBU} />
+            <YAxis type="category" dataKey="nama_kelas" width={56} interval={0} {...SUMBU} />
+          </>
+        ) : (
+          <>
+            <CartesianGrid vertical={false} stroke={WARNA.garisBantu} />
+            <XAxis dataKey="nama_kelas" {...SUMBU} interval={0} />
+            <YAxis {...SUMBU} axisLine={false} allowDecimals={false} />
+          </>
+        )}
         <Tooltip
           cursor={{ fill: 'var(--bg-subtle)' }}
           content={(p: TooltipContentProps) =>
@@ -82,7 +110,7 @@ export function GrafikKehadiranKelas({ data }: { data: KehadiranKelasHariIni[] }
             // Celah 2px warna permukaan antarsegmen; ujung data membulat 4px.
             stroke={WARNA.permukaan}
             strokeWidth={2}
-            radius={i === seri.length - 1 ? [4, 4, 0, 0] : 0}
+            radius={i === seri.length - 1 ? (horizontal ? [0, 4, 4, 0] : [4, 4, 0, 0]) : 0}
             isAnimationActive={animasi}
             animationDuration={320}
           />
@@ -97,7 +125,11 @@ export function GrafikTren({ data }: { data: TitikTren[] }) {
   const animasi = useAnimasiGrafik();
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 12, right: 16, bottom: 0, left: -16 }}>
+      <LineChart
+        accessibilityLayer={false}
+        data={data}
+        margin={{ top: 12, right: 16, bottom: 0, left: -16 }}
+      >
         <CartesianGrid vertical={false} stroke={WARNA.garisBantu} />
         <XAxis dataKey="minggu_ke" tickFormatter={(m: number) => `P${m}`} {...SUMBU} />
         <YAxis
@@ -155,7 +187,12 @@ export function GrafikJamKosong({
   const animasi = useAnimasiGrafik();
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 40, bottom: 0, left: 0 }}>
+      <BarChart
+        accessibilityLayer={false}
+        data={data}
+        layout="vertical"
+        margin={{ top: 4, right: 40, bottom: 0, left: 0 }}
+      >
         <CartesianGrid horizontal={false} stroke={WARNA.garisBantu} />
         <XAxis type="number" allowDecimals={false} {...SUMBU} />
         <YAxis type="category" dataKey="nama_kelas" width={56} {...SUMBU} />

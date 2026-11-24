@@ -111,6 +111,79 @@ describe('Dashboard Utama (admin, manajemen)', () => {
     expect(screen.getByText('Admin Contoh masuk.')).toBeInTheDocument();
   });
 
+  it('kartu utama: JP tercatat dari JP terjadwal dan kelas yang perlu perhatian', async () => {
+    pasangApiTiruan('manajemen_guru', (url) =>
+      url.includes('/dashboard/ringkasan')
+        ? {
+            body: {
+              data: {
+                ...RINGKASAN,
+                hari_ini: {
+                  ...RINGKASAN.hari_ini,
+                  jp_tercatat: 36,
+                  persentase_terisi: 75,
+                  per_kelas: [
+                    { kelas_id: 7, nama_kelas: 'X-1', Hadir: 6, Mendampingi: 0, 'Tidak Hadir': 2 },
+                    { kelas_id: 8, nama_kelas: 'X-2', Hadir: 0, Mendampingi: 0, 'Tidak Hadir': 0 },
+                    { kelas_id: 9, nama_kelas: 'X-3', Hadir: 8, Mendampingi: 0, 'Tidak Hadir': 0 },
+                  ],
+                },
+                log_terbaru: null,
+              },
+            },
+          }
+        : undefined,
+    );
+    tampilkanApp('/');
+    const kartu = await screen.findByRole('region', { name: 'Kehadiran guru hari ini' });
+    expect(within(kartu).getByText('36')).toBeInTheDocument();
+    expect(within(kartu).getByText('dari 48 JP terjadwal sudah dicatat')).toBeInTheDocument();
+    expect(
+      within(kartu).getByRole('progressbar', { name: 'Persentase jam terisi hari ini' }),
+    ).toHaveAttribute('aria-valuenow', '75');
+
+    const perhatian = within(kartu).getByRole('list', { name: 'Kelas yang perlu perhatian' });
+    const tautan = within(perhatian).getAllByRole('link');
+    // Guru tidak hadir lebih dulu, lalu kelas tanpa catatan; kelas lengkap tidak muncul.
+    expect(tautan.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['X-12 JP guru tidak hadir', '/kelas/7'],
+      ['X-2Belum ada catatan hari ini', '/kelas/8'],
+    ]);
+  });
+
+  it('hari tanpa jadwal dan tren tanpa rekap: pesan jelas, bukan angka 0 % yang menyesatkan', async () => {
+    pasangApiTiruan('manajemen_guru', (url) =>
+      url.includes('/dashboard/ringkasan')
+        ? {
+            body: {
+              data: {
+                ...RINGKASAN,
+                hari_ini: {
+                  ...RINGKASAN.hari_ini,
+                  jp_terjadwal: 0,
+                  jp_tercatat: 0,
+                  persentase_terisi: 0,
+                  per_kelas: [
+                    { kelas_id: 8, nama_kelas: 'X-2', Hadir: 0, Mendampingi: 0, 'Tidak Hadir': 0 },
+                  ],
+                },
+                tren: RINGKASAN.tren.map((t) => ({ ...t, persentase: null, jumlah_guru: 0 })),
+                log_terbaru: null,
+              },
+            },
+          }
+        : undefined,
+    );
+    tampilkanApp('/');
+    expect(await screen.findByText(/Tidak ada jam terjadwal hari ini/)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('progressbar', { name: 'Persentase jam terisi hari ini' }),
+    ).not.toBeInTheDocument();
+    // Tanpa jadwal, kelas tanpa catatan bukan "perlu perhatian".
+    expect(screen.getByText(/Tidak ada kelas dengan guru tidak hadir/)).toBeInTheDocument();
+    expect(screen.getByText(/Belum ada rekap pekan yang selesai/)).toBeInTheDocument();
+  });
+
   it('manajemen: tanpa log aktivitas', async () => {
     pasangApiTiruan('manajemen_guru', (url) =>
       url.includes('/dashboard/ringkasan')
@@ -163,5 +236,25 @@ describe('Dashboard penilai', () => {
       'href',
       '/penilaian-kinerja?bulan=11&tahun=2026',
     );
+    // Kemajuan memakai nada tetap (bukan ambang merah/kuning) dan tautan langsung per guru.
+    expect(
+      screen.getByRole('progressbar', { name: 'Guru yang sudah dinilai, November 2026' }),
+    ).toBeInTheDocument();
+    // Jendela tertutup → pengisian terkunci untuk penilai, jadi tombolnya "Lihat".
+    expect(screen.getByRole('link', { name: 'Lihat Guru Contoh 05' })).toHaveAttribute(
+      'href',
+      '/penilaian-kinerja?bulan=11&tahun=2026&q=G05',
+    );
+  });
+
+  it('jendela terbuka: tombol per guru menjadi "Nilai"', async () => {
+    pasangApiTiruan('guru_penilai', (url) =>
+      url.includes('/dashboard/penilai')
+        ? { body: { data: { ...PENILAI, jendela: { ...PENILAI.jendela, terbuka: true } } } }
+        : undefined,
+    );
+    tampilkanApp('/');
+    expect(await screen.findByRole('link', { name: 'Nilai Guru Contoh 05' })).toBeInTheDocument();
+    expect(screen.getByText('Terbuka')).toBeInTheDocument();
   });
 });

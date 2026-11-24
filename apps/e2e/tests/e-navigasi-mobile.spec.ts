@@ -93,6 +93,7 @@ test.describe('navigasi mobile & responsif Fase 12', () => {
   test('mode reduced-motion tidak menjalankan animasi spasial', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await masuk(page, AKUN.admin);
+    await expect(page.locator('.halaman-masuk')).toBeVisible();
     const durasi = await page.evaluate(() => {
       const el = document.querySelector('.halaman-masuk');
       return el ? getComputedStyle(el).animationName : '';

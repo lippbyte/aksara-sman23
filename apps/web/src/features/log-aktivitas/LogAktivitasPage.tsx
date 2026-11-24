@@ -7,12 +7,24 @@ import {
 } from '@sms/shared';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
+import { KartuRingkas } from '@/components/KartuRingkas';
 import { FilterBar, FilterItem, useFilterUrl } from '@/components/FilterBar';
 import { Input, Select } from '@/components/ui/input';
 import { api, pesanGalat, qs } from '@/lib/api';
 import { waktu } from '@/lib/format';
 
 const KUNCI_FILTER = ['module', 'user_id', 'tanggal_dari', 'tanggal_sampai'] as const;
+
+/** Kartu ponsel: keterangan sebagai judul, lalu waktu · pengguna dan modul · kode · IP. */
+function kartuLog(l: AuditLog) {
+  return (
+    <KartuRingkas
+      judul={l.description}
+      sub={`${waktu(l.created_at)} · ${l.nama_pengguna ?? '—'}`}
+      detail={[l.module, l.aktivitas, l.ip_address ? `IP ${l.ip_address}` : null]}
+    />
+  );
+}
 
 const kolom: Kolom<AuditLog>[] = [
   {
@@ -113,6 +125,7 @@ export function LogAktivitasPage() {
         galat={log.isError ? pesanGalat(log.error) : null}
         onCobaLagi={() => void log.refetch()}
         keterangan="Log aktivitas"
+        kartuMobile={kartuLog}
         kosong={{
           pesan: f.adaFilter
             ? 'Tidak ada aktivitas yang cocok dengan filter.'

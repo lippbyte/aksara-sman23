@@ -1,9 +1,9 @@
 # DESIGN — School Management System (nama kerja)
 
-Versi 1.0 · 15 November 2026
+Versi 1.1 · 24 November 2026 (Fase 1 redesain UI/UX, lihat §12 dan `docs/AUDIT-UIUX.md`)
 Dasar: gaya visual prototype Laravel "KehadiranGuru" v2.3 (Tailwind, Blade + Alpine). Gaya itu **dipertahankan**, lalu dirapikan untuk React dan diperbaiki sisi aksesibilitasnya.
 
-> Identitas visual produk belum ditetapkan `[PERLU DIKONFIRMASI]`. Semua warna disimpan sebagai token (CSS variable) agar bisa diganti tanpa menyentuh komponen. **Jangan** memakai logo, warna, atau maskot EDILAKSO maupun produk EDILAKSO lain (LANJUT, SUSI, dll.) di dalam UI aplikasi. EDILAKSO hanya muncul sebagai teks "Dikembangkan oleh EDILAKSO" di footer dan halaman Tentang.
+> Identitas visual: nama produk **AKSARA** dengan palet biru `[TIM: 24 Nov 2026]` (REDESIGN-DIRECTION §4). Semua warna disimpan sebagai token (CSS variable) agar bisa diganti tanpa menyentuh komponen. Nilai yang berlaku ada di §12; tabel §2 di bawah adalah sejarah v1.0. **Jangan** memakai logo, warna, atau maskot EDILAKSO maupun produk EDILAKSO lain (LANJUT, SUSI, dll.) di dalam UI aplikasi. EDILAKSO hanya muncul sebagai teks "Dikembangkan oleh EDILAKSO" di footer dan halaman Tentang.
 
 ---
 
@@ -98,7 +98,7 @@ Definisikan di Tailwind v4: `--text-2xs: 0.6875rem; --text-2xs--line-height: 1re
 
 ## 6. Komponen
 
-Pakai **shadcn/ui** (Radix) sebagai dasar, disesuaikan dengan token di atas. Ikon: **lucide-react**, 16–18 px, `stroke-width 2`.
+Pakai **shadcn/ui** (Radix) sebagai dasar, disesuaikan dengan token di atas. Ikon: **Phosphor** (`@phosphor-icons/react`), lihat §12.4. *(v1.0 memakai lucide-react; sudah dimigrasi seluruhnya.)*
 
 | Komponen | Spesifikasi |
 |---|---|
@@ -159,11 +159,11 @@ Ketentuan: tidak ada grafik 3D, tidak ada pie untuk lebih dari 4 kategori, sumbu
 ## 11. Peningkatan UI/UX, navigasi mobile, latar, dan gerak halus
 
 ### 11.1 Sistem desain v1 (Laravel) dipertahankan, dengan empat penyesuaian
-Ringkasan sistem v1: Inter, slate netral, aksen indigo, border tipis alih-alih bayangan tebal, `rounded-xl` untuk kartu dan `rounded-lg` untuk input, tombol utama slate-900, kaca pada halaman masuk. Semua itu sudah ada di §2–6 dan tetap berlaku. Penyesuaian dari v1:
+Ringkasan sistem v1: Inter, slate netral, aksen indigo (`--accent`), border tipis alih-alih bayangan tebal, `rounded-xl` untuk kartu dan `rounded-lg` untuk input, tombol utama `--primary`, kaca pada halaman masuk. Warna selalu lewat token, bukan nama palet Tailwind. Satuan teks dan jarak memakai `rem` (1 rem = 16 px); border tetap px. Semua itu sudah ada di §2–6 dan tetap berlaku. Penyesuaian dari v1:
 
-1. **`text-2xs` = 11 px / 16 px** (v1: 10 px). Tidak ada ukuran di bawah itu.
+1. **`text-2xs` = 0.6875rem (11 px) / 1rem (16 px)** (v1: 10 px), hanya untuk label dan lencana. Tidak ada ukuran di bawah itu. **Teks dasar ≥ 0.875rem (14 px); isian form ≥ 1rem (16 px)** agar iOS tidak auto-zoom.
 2. **Tanpa `font-black` dan `uppercase` pada lencana status.** Bobot maksimum 700. `uppercase` hanya untuk label kecil dan header tabel.
-3. **`slate-400` hanya untuk ikon dan dekorasi**, bukan teks.
+3. **`--icon-muted` hanya untuk ikon dan dekorasi**, bukan teks.
 4. **Mode gelap ditunda.** Token tetap dibuat sebagai variabel CSS sehingga mudah ditambahkan nanti. `[PERLU DIKONFIRMASI]` apakah perlu di versi pertama.
 
 ### 11.2 Navigasi mobile (<1024 px): bar bawah ala aplikasi
@@ -178,11 +178,11 @@ Ringkasan sistem v1: Inter, slate netral, aksen indigo, border tipis alih-alih b
 | `manajemen_guru` | Beranda · Rekap · Penilaian · Laporan | Lainnya |
 | `admin` | Beranda · Absensi Guru · Rekap · Penilaian | Lainnya |
 
-- Tinggi 56 px **ditambah** `env(safe-area-inset-bottom)`. Area sentuh tiap slot minimal 48 × 48 px. Ikon 22 px dengan **label selalu tampil** (11 px). Slot aktif: ikon dan label berwarna indigo-600 dengan penanda pil di belakang ikon, jadi tidak mengandalkan warna saja.
+- Tinggi 3.5rem **ditambah** `env(safe-area-inset-bottom)`. Area sentuh tiap slot minimal 3rem × 3rem (48 px, di atas minimum 44 px). Ikon 1.375rem dengan **label selalu tampil** (0.6875rem). Slot aktif: ikon dan label berwarna `--accent` dengan penanda pil `--accent-soft` di belakang ikon, jadi tidak mengandalkan warna saja.
 - Semantik: `<nav aria-label="Navigasi utama">`, `aria-current="page"`, urutan fokus papan ketik logis.
 - Konten halaman diberi `padding-bottom` setinggi bar + safe area. Tombol aksi utama form (mis. "Simpan") berupa bar lekat **di atas** bar navigasi.
 - Bar disembunyikan saat papan ketik virtual terbuka, supaya tidak menutupi isian.
-- Header mobile: `h-12`, judul halaman + menu akun. **Tanpa hamburger.** Menu sisa ada di "Lainnya".
+- Header mobile: min. 3.5rem, judul halaman saja. **Tanpa hamburger.** Menu sisa ada di "Lainnya". *(Diubah Fase 1: menu akun tidak lagi di header mobile; satu-satunya tempat akun di bawah 1024 px adalah lembar "Lainnya"/"Akun", yang kepalanya menampilkan nama, peran, dan kelas. Lihat §12.5.)*
 - Lembar "Lainnya": muncul dari bawah, bisa ditutup dengan tombol, geser ke bawah, dan Esc, fokus terkunci di dalamnya dan kembali ke pemicu saat ditutup.
 - Perpindahan halaman memakai penanda aktif yang bergeser halus (lihat 11.4).
 
@@ -190,11 +190,11 @@ Ringkasan sistem v1: Inter, slate netral, aksen indigo, border tipis alih-alih b
 
 **Halaman masuk**
 - Foto tampak depan sekolah sebagai lapisan latar penuh layar, ditumpuk dengan lapisan putih/slate sehingga foto hanya terlihat samar (setara opasitas 8–15 %). **Jangan** menurunkan opasitas elemen yang berisi teks; pakai lapisan terpisah (pseudo-element atau `<img>` dekoratif) agar teks tetap tajam.
-- Kartu masuk: putih 90 %+ dengan `backdrop-filter: blur(12px)` (cadangan: putih solid). Kontras teks tetap ≥ 4,5:1.
+- Kartu masuk: `--bg-surface` 90 %+ dengan `backdrop-filter: blur(0.75rem)`. Cadangan solid wajib untuk `prefers-reduced-transparency`, `prefers-contrast: more`, dan `@supports not (backdrop-filter: blur(1px))`. Kontras teks tetap ≥ 4,5:1.
 - Bila foto belum diunggah: pola/gradasi bawaan dari token, bukan area kosong.
 
 **Dashboard**
-- Jangan menaruh foto penuh di belakang tabel dan grafik. Pendekatan yang disarankan: **lapisan foto di bagian atas halaman** (±280 px, opasitas 6–10 %, abu-abu, sedikit blur) yang memudar ke `--bg-app` dengan `mask-image: linear-gradient`. Kartu tetap putih solid.
+- Jangan menaruh foto penuh di belakang tabel dan grafik. Pendekatan yang disarankan: **lapisan foto di bagian atas halaman** (±17.5rem, opasitas 6–10 %, abu-abu, sedikit blur) yang memudar ke `--bg-app` dengan `mask-image: linear-gradient`. Kartu tetap putih solid.
 - Area kosong di bawah konten diisi lewat tata letak (kartu yang lebih tinggi, ringkasan tambahan, state kosong yang informatif), bukan hanya gambar.
 
 **Ketentuan gambar**
@@ -205,9 +205,9 @@ Ringkasan sistem v1: Inter, slate netral, aksen indigo, border tipis alih-alih b
 ### 11.4 Gerak halus
 
 - Token: `--dur-fast: 150ms`, `--dur-base: 220ms`, `--dur-slow: 320ms`, `--ease-out: cubic-bezier(.2,.8,.2,1)`.
-- Yang dianimasikan: masuk halaman (fade + geser 6 px, sekali), kartu dashboard muncul berurutan (jeda 40 ms, maksimal 8 kartu), penanda aktif bar bawah, lembar dan dialog (masuk/keluar), toast, tekan tombol (`scale(.98)`), isi ProgressBar, grafik tergambar sekali saat pertama muncul, skeleton.
+- Yang dianimasikan: masuk halaman (fade + geser 0.375rem, sekali), kartu dashboard muncul berurutan (jeda 40 ms, maksimal 8 kartu), penanda aktif bar bawah, lembar dan dialog (masuk/keluar), toast, tekan tombol (`scale(0.97)`, 100 ms ease-out, sesuai AGENTS §13), isi ProgressBar (lewat `scaleX`), grafik tergambar sekali saat pertama muncul, skeleton.
 - Aturan: hanya `transform` dan `opacity`; tidak menggeser tata letak (CLS 0); tidak ada animasi pada baris tabel, ketikan, atau angka yang sedang diedit; tidak ada animasi berulang selain indikator memuat.
-- `@media (prefers-reduced-motion: reduce)`: hilangkan gerak spasial, sisakan fade ≤ 100 ms, matikan animasi grafik.
+- `@media (prefers-reduced-motion: reduce)`: ganti gerak spasial/spring dengan cross-fade ≈ 200 ms (sesuai AGENTS §13), matikan animasi grafik.
 - Utamakan fitur platform (transisi CSS, `@starting-style`, View Transitions untuk perpindahan halaman, animasi bergulir) **dengan cadangan** tanpa animasi. Cek dukungan browser lewat panduan sebelum memakai.
 - Uji di Chrome DevTools dengan CPU 4× lebih lambat; tidak boleh patah-patah.
 
@@ -215,9 +215,169 @@ Ringkasan sistem v1: Inter, slate netral, aksen indigo, border tipis alih-alih b
 
 | Halaman | Mobile (360–1023 px) |
 |---|---|
-| Masuk | Satu kolom, kartu di tengah, latar foto, tombol penuh lebar 48 px |
+| Masuk | Satu kolom, kartu di tengah, latar foto, tombol penuh lebar, tinggi 3rem |
 | Dashboard | Satu kolom; KPI 2 × 2; grafik penuh lebar dengan tabel alternatif ringkas; "Catat" sebagai aksi utama untuk sekretaris |
 | Absensi Guru / Siswa | Daftar kartu (bukan tabel); filter di lembar bawah; form status memakai SegmentedStatus; bar simpan lekat |
 | Rekap, Penilaian, Laporan | Kartu per guru/MGMP dengan ProgressBar; tabel penuh hanya di ≥ 768 px; ekspor di menu aksi |
 | Pengaturan | Tab menjadi daftar yang dibuka satu per satu; form di layar penuh |
-| Semua | Tidak ada gulir horizontal pada 360 px; teks dasar ≥ 14 px; fokus terlihat |
+| Semua | Tidak ada gulir horizontal pada 360 px; teks dasar ≥ 0.875rem (14 px), isian ≥ 1rem (16 px); fokus terlihat |
+
+---
+
+## 12. Sistem desain AKSARA (Fase 1 redesain, 24 Nov 2026)
+
+Bagian ini **menggantikan** nilai di §2, §4, dan §6 bila berbeda. Sumber kode: `apps/web/src/styles/tokens.css`.
+Keputusan tim terkait: D1–D6 di `docs/AUDIT-UIUX.md` §7.
+
+### 12.1 Warna
+
+| Token | Nilai | Pakai untuk |
+|---|---|---|
+| `--bg-app` | `#F7F8FA` | Latar halaman |
+| `--bg-surface` | `#FFFFFF` | Kartu, sidebar, header, tabel |
+| `--bg-subtle` | `#EEF2F7` | Baris hover, latar isian terkunci, chip |
+| `--border` / `--border-soft` | `#DCE3EC` / `#EDF1F6` | Garis kartu dan pemisah (dekoratif) |
+| `--border-control` | `#8592A6` (3,15:1) | **Batas kontrol isian**: input, select, pilihan status yang tidak terpilih (WCAG 1.4.11) |
+| `--text` / `--text-muted` / `--text-subtle` | `#172B4D` / `#42526E` / `#5E6C84` | Teks utama / sekunder / keterangan (≥ 4,5:1) |
+| `--icon-muted` | `#7A869A` | Hanya ikon dan dekorasi |
+| `--primary` (= `--accent`, `--focus`) | `#4169A1` | Tombol utama, menu aktif, tautan, fokus |
+| `--accent-soft` | `#EAF1FA` | Latar menu/chip aktif |
+| `--danger` | `#E11D48` | Tombol hapus (putih di atasnya 4,70:1) |
+
+**Status data** (teks pada latar lembut ≥ 4,7:1; teks status juga dipakai sebagai isi pekat pilihan terpilih dengan teks putih ≥ 5:1):
+
+| Status | Teks | Latar | Grafik/titik |
+|---|---|---|---|
+| Hadir / hadir | `#16803C` | `#ECFDF3` | `#22A06B` |
+| **Mendampingi** | **`#6D28D9` (violet)** | `#F5F3FF` | `#8B5CF6` |
+| Tidak Hadir / alpa | `#BE123C` | `#FFF1F2` | `#E11D48` |
+| Izin | `#92400E` | `#FFFBEB` | `#D97706` |
+| Sakit | `#0369A1` | `#F0F9FF` | `#0284C7` (≥ 3:1) |
+
+Mendampingi **sengaja bukan biru merek**: biru sudah berarti "terpilih / tautan / menu aktif".
+
+**Nada umpan balik** (bukan status data): `peringatan` (teks `#92400E`, latar `#FFFBEB`, garis `#D97706`) untuk hal yang perlu perhatian
+("n belum dicatat", pekan belum disinkron, koreksi manual); `info` (teks `#2B579A`, latar `#EAF1FA`) untuk tingkat baik.
+
+**Tingkat** (ProgressBar, predikat): ≥90 / Sangat Baik / Sangat Aktif → hadir (hijau) · ≥75 / Baik / Aktif → `info` ·
+≥60 / Cukup / Cukup Aktif → `peringatan` · selain itu → tidak-hadir (merah). Ambang tidak berubah (`AMBANG_PERSENTASE`).
+
+Aturan: warna status hanya untuk status itu sendiri. Lencana peran, hitungan, dan peringatan memakai `netral`, `info`, atau `peringatan`.
+Status akun dan data master memakai nilai `aktif`/`tidak_aktif` yang sama (hijau/netral).
+
+### 12.2 Tipografi
+
+| Peran | Kelas |
+|---|---|
+| Judul halaman (header, satu `h1`) | `text-lg lg:text-xl font-bold tracking-tight`, boleh dua baris (tidak dipotong) |
+| Judul bagian/kartu (`h2`) | `text-base font-semibold` |
+| Isi | `text-sm` (14 px) |
+| Label isian / label filter / label KPI | `text-xs`–`text-sm font-medium`, **huruf biasa** (bukan kapital) |
+| Header tabel | `text-2xs font-semibold uppercase tracking-wider` (satu-satunya tempat kapital) |
+| Angka KPI | `text-2xl font-bold tabular-nums` |
+| Isian form | ≥ 16 px di layar < 640 px **dan** di semua layar sentuh (`pointer: coarse`) |
+
+### 12.3 Sudut, ukuran, dan target sentuh
+
+- Token sudut: `rounded-kontrol` (10 px: tombol, input, chip), `rounded-kartu` (16 px: kartu, tabel, state kosong),
+  `rounded-lembar` (20 px: dialog dan lembar bawah). Tidak ada nilai sudut/ukuran sembarang (`[10px]`, `[19px]`).
+- Ukuran mengikuti **alat masuk**, bukan lebar layar: `pointer: coarse` → 44 px (tombol, input, ikon, item menu);
+  `pointer: fine` → 36 px. Varian `Button`: `primary`, `secondary`, `ghost` (tersier), `danger`; ukuran `md` (bawaan), `sm`, `icon`.
+- Tombol ikon wajib `aria-label`. Tombol kecil secara visual (mis. lipat sidebar) memperluas area klik lewat `::after`.
+
+### 12.4 Ikon (Phosphor)
+
+- Satu pustaka: `@phosphor-icons/react`, impor bernama `XxxIcon`. `lucide-react` sudah dihapus dari dependensi.
+- Bawaan lewat `IconContext`: weight `regular`, 20 px. `fill` hanya untuk keadaan aktif/terpilih (menu aktif, centang pilihan).
+- Menu: Dashboard `SquaresFour` · Absensi Guru `ChalkboardTeacher` · Absensi Siswa `Student` · Rekap `CalendarCheck` ·
+  Penilaian `Medal` · MGMP `UsersThree` · Laporan `FileText` · Log `ClockCounterClockwise` · Pengaturan `GearSix`.
+- Ukuran: menu 20 px, bar bawah 22 px, tombol 16 px, kosong/galat 24 px. Ikon dekoratif `aria-hidden="true"`.
+
+### 12.5 Navigasi
+
+- Sidebar dikelompokkan: **Harian** (Dashboard, Absensi Guru, Absensi Siswa) · **Rekap & Penilaian** · **Administrasi**.
+  Kelompok tanpa menu untuk peran itu tidak tampil. Saat dilipat, judul kelompok diganti garis pemisah.
+- Lebar sidebar berganti tanpa animasi tata letak.
+- < 1024 px: menu akun **hanya** di lembar "Lainnya"/"Akun" (kepala lembar: avatar, nama, peran, kelas). Header hanya judul.
+- Label bar bawah memakai istilah baku (Absensi Guru/Siswa) dan boleh dua baris; ikon rata atas agar semua slot sejajar. Tidak dipotong di 320–430 px.
+- Lembar bawah: ikuti jari 1:1 ke bawah, rubber-band 0,55 ke atas, tutup bila ditarik > 72 px atau dikibas (> 0,5 px/ms).
+- Saat papan ketik terbuka, `<html data-papan-ketik>` membuat `--tinggi-bar-bawah` = 0 sehingga bar simpan lekat turun ke tepi layar.
+
+### 12.6 Komponen
+
+| Komponen | Aturan Fase 1 |
+|---|---|
+| **SegmentedStatus** | Terpilih: isi pekat warna status + teks putih + `font-semibold` + centang (`fill`). Beda terang-gelap dan bentuk, bukan hanya rona. Tidak terpilih: bingkai `--border-control`. Ukuran mengikuti lebar grup (container query, bukan lebar layar): centang hanya tampil bila muat (ringkas ≥ 18rem, biasa ≥ 30rem) dan grup ≥ 3 pilihan memakai teks 12 px di bawah 22rem agar "Mendampingi" tidak terpotong. Tanpa dukungan container query: teks ringkas tanpa centang; isi pekat tetap penanda. |
+| **Field** | `wajib` → `*` visual + `aria-required`. Untuk kontrol kustom pakai bentuk fungsi `{(atribut) => …}`: label menamai grup lewat `aria-labelledby`, galat lewat `aria-describedby`. |
+| **Dialog** | Bar aksi (`DialogAksi`) lekat di bawah area gulir. Prop `kotor` (form berisi): Esc, ketuk latar, X, dan `DialogBatal` menanyakan "Buang perubahan?" dengan aksi aman ("Lanjut mengisi") di kiri dan mendapat fokus. |
+| **PenjagaPerubahan** | Halaman dengan isian panjang (Absensi Siswa): menahan pindah halaman, perubahan filter di URL, dan tutup tab selama ada perubahan. |
+| **EmptyState** | `judul` (apa yang terjadi) + `pesan` (kenapa / langkah berikutnya) + `aksi`. Nada `netral`, `peringatan`, `galat` (diumumkan sebagai `alert`). |
+| **FilterBar** | Label huruf biasa. Lembar filter mobile: pilihan langsung berlaku; tombol utama "Lihat hasil". |
+| **Undo** | Aksi massal yang bisa dibalik (Tandai semua hadir) memakai toast "Urungkan", bukan dialog konfirmasi. Konfirmasi hanya untuk hal yang tidak bisa dibalik. |
+
+### 12.7 Gambar sekolah
+
+Logo dan foto **tidak pernah** dibundel di repo. Sumbernya Pengaturan Sekolah lewat API
+(`/api/v1/sekolah/logo`, `/sekolah/latar/masuk` publik; latar dashboard dengan sesi). Belum diunggah →
+tanda netral (topi wisuda di kotak `--primary`) dan pola latar bawaan. Tidak ada foto latar global di belakang halaman aplikasi.
+
+### 12.8 Alur harian (Fase 2, 24 Nov 2026)
+
+Sumber: `docs/AUDIT-UIUX.md` §10. Tidak ada perubahan API, data, akses, atau rumus.
+
+| Pola | Aturan |
+|---|---|
+| **NavigasiTanggal** | ‹ tanggal › + "Hari ini" dengan isian tanggal bawaan browser. Container query: di bawah 22rem, "Hari ini" naik ke baris label agar isian tetap ±200 px. "Hari ini" dinonaktifkan (tidak disembunyikan) pada hari ini supaya tombol lain tidak bergeser. |
+| **PilihJam** | Deret chip jam 0–12 yang bisa digulir ke samping (radiogroup: panah, Home/End). Chip menampilkan mapel terjadwal (**hanya petunjuk**, keputusan D7 opsi a) dan centang `fill` hijau bila absensi jam itu sudah tersimpan. Tepi memudar lewat `.gulir-samping` hanya bila masih ada chip di luar layar. |
+| **Kartu ponsel per halaman** | `DataTable` menerima `kartuMobile` dan `grupMobile`. Kelompok (mis. per tanggal) memakai judul lekat tepat di bawah header (`--tinggi-header`, diukur Header). `html` memakai `scroll-padding-top` agar fokus tidak tertutup. |
+| **KartuKehadiran** | Kolom jam di kiri, lalu guru + status, lalu mapel · (kelas) · JP. Tugas hanya bila Tidak Hadir atau "Tidak Ada"; keterangan hanya bila diisi. Tombol ubah/hapus 44 px langsung di kartu. Label tombol menyebut tanggal. |
+| **Absensi Siswa** | Bar sesi (kelas, tanggal, jam) → kepala sesi tiga baris (kelas · jam, tanggal · mapel + keadaan, jumlah per status) → daftar. Baris non-Hadir: latar lembut + garis tepi warna status. Tata letak baris mengikuti lebar kartu (container query): ≥ 36rem nama \| status; ≥ 48rem nama \| status \| keterangan. Bar simpan satu baris; setelah tersimpan menawarkan "Lanjut ke jam ke-n+1". |
+| **Dashboard Sekretaris** | Urutan kerja: konteks + tanggal → **Jadwal hari ini** (daftar periksa per slot: status + satu aksi "Catat"/"Ubah"; catatan tanpa slot = "di luar jadwal") → absensi siswa hari itu → ringkasan kehadiran guru (satu kartu, bukan tiga KPI) → jurnal di balik pengungkap. Pencocokan slot mengikuti aturan server `sudah_dicatat` (catatan guru yang sama mencakup jam awal slot). |
+| **Form kehadiran** | Isian Tugas tampil bila status bukan Hadir **atau** nilainya bukan bawaan "Ada" (tidak ada nilai tersembunyi). Nilai simpanan bawaan tetap "Ada". |
+
+### 12.9 Dashboard pemantauan (Fase 3, 24 Nov 2026)
+
+Sumber: `docs/AUDIT-UIUX.md` §11.
+
+| Pola | Aturan |
+|---|---|
+| **Urutan admin/manajemen** | Kartu utama "Kehadiran guru hari ini" (JP tercatat dari JP terjadwal + batang, catatan per status, "Perlu perhatian") → kartu ringkas "Data sekolah" → grafik per kelas & tren → jam kosong & guru terendah → log (admin). Tanpa kartu sambutan dekoratif. |
+| **Perlu perhatian** | Hanya fakta dari data yang ada: kelas dengan JP guru Tidak Hadir (urut terbanyak), lalu kelas tanpa catatan hari ini (hanya bila hari ini ada jam terjadwal). Tiap baris menaut ke `/kelas/:id`. Kosong → kalimat positif dengan centang. |
+| **Data belum cukup** | Hari tanpa jam terjadwal dan tren tanpa rekap ditulis sebagai kalimat; jangan gambar 0 % atau sumbu kosong. |
+| **Grafik per kelas** | Ponsel (< 640 px): batang horizontal, tinggi = jumlah kelas × 28 px. Tabel alternatif tetap ada. Orientasi lewat `useKueriMedia` karena Recharts butuh ukuran piksel. |
+| **ProgressBar** | Bawaan: warna menurut ambang (tingkat). `nada` tetap untuk kemajuan pekerjaan (mis. guru dinilai) agar awal periode tidak tampil merah. `penuh` untuk batang selebar wadah. |
+| **Penilai** | Satu kartu kemajuan + daftar guru belum dinilai. Baris menaut langsung ke penilaian guru itu (`?q=<kode>`); label "Nilai" saat jendela terbuka, "Lihat" saat tertutup (pengisian terkunci). Keadaan jendela ditulis sebagai kalimat dengan tanggal. |
+
+### 12.10 Data admin (Fase 4, 24 Nov 2026)
+
+Sumber: `docs/AUDIT-UIUX.md` §12. Berlaku untuk semua tab data Pengaturan (`TabSumber`/`FormSumber`).
+
+| Pola | Aturan |
+|---|---|
+| **Jumlah data** | "n guru" (atau "… cocok dengan filter") tepat di atas daftar, diumumkan `aria-live`. |
+| **Kartu ponsel ringkas** | Judul + 1–2 baris pendek + aksi 44 px di kanan; tanpa baris label/nilai. Lencana hanya untuk yang menyimpang (Tidak aktif / Nonaktif). Jadwal dikelompokkan per hari dengan judul lekat. |
+| **Form berkelompok** | Isian dalam `fieldset` + `legend` bernama (mis. Identitas, Mengajar, Status). Isian pendek (`setengah`) berdampingan mulai 640 px. Kelompok yang semua isiannya tersembunyi tidak tampil. |
+| **Pilihan sedikit** | 2–4 opsi pendek memakai pilihan bersebelahan (`segmen`/SegmentedStatus), bukan dropdown atau ketikan angka: Status, Jenis kelamin, Jumlah JP. Rentang tetap (jam 0–12) memakai daftar pilihan dari konstanta yang sama dengan skema. |
+| **Dialog** | `overflow-hidden` agar bar aksi lekat tidak menyembul di luar sudut membulat. |
+
+### 12.11 Halaman sekunder (Fase 5, 24 Nov 2026)
+
+Sumber: `docs/AUDIT-UIUX.md` §13.
+
+| Pola | Aturan |
+|---|---|
+| **KartuRingkas** (`components/KartuRingkas.tsx`) | Kartu ponsel bawaan untuk daftar berisi banyak kolom: judul, `sub`, `detail` (digabung " · "), `lencana` hanya untuk yang menyimpang, `bawah` untuk batang persentase atau tombol berlabel teks, `aksi` ikon 44 px di kanan. Tabel desktop tidak berubah. |
+| **Toolbar ponsel** | Aksi mengisi sisa baris di samping "Filter" dan rata atas; isian pendek (Bulan/Tahun) berdampingan. |
+| **Halaman masuk** | Nama produk sekali: satu `h1` (merek) + satu baris (nama kustom sekolah bila diisi, selain itu subjudul). |
+| **Isian angka pendek** | Bobot dan sejenisnya dalam grid 3 kolom di semua lebar. |
+| **Bar simpan lekat** | Selalu `bottom-(--tinggi-bar-bawah)` dan latar solid (atau `.bar-kaca` yang punya cadangan), agar turun saat papan ketik terbuka. |
+| **Token sudut** | Tidak ada lagi `rounded-lg/xl/2xl` di kode: kontrol, petak ikon, dan tooltip `rounded-kontrol`; kartu dan panel `rounded-kartu`; dialog/lembar `rounded-lembar`. |
+
+### 12.12 Fokus dan papan ketik (Fase 6, 24 Nov 2026)
+
+| Aturan | Rincian |
+|---|---|
+| **Fokus kembali ke pemicu** | Setiap `Dialog` mencatat elemen yang fokus saat dibuka dan mengembalikannya saat ditutup (Radix hanya melakukannya untuk `Dialog.Trigger`). |
+| **Cincin fokus** | `:focus-visible` 2 px `--focus`, offset 2 px. Isian tanggal juga lewat `:focus-within` karena ikon kalendernya difokus terpisah. |
+| **Fokus tidak tertutup** | Header lekat → `scroll-padding-top`; bar simpan lekat → beri kelas `bar-simpan-lekat` agar `scroll-padding-bottom` ikut bertambah (WCAG 2.4.11). |
+| **Grafik** | Wadah grafik `aria-hidden` dan Recharts `accessibilityLayer={false}`; isinya tersedia lewat tabel "Lihat tabel" (dan tautan di tabel bila ada). |

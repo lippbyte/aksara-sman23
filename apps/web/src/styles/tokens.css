@@ -1,52 +1,75 @@
 /*
- * Token desain (DESIGN.md §2–3).
- * Identitas visual produk belum ditetapkan: ganti nilai di :root, komponen tidak perlu disentuh.
- * Palet bawaan Tailwind dimatikan agar komponen hanya memakai token.
+ * Token desain Aksara (REDESIGN-DIRECTION.md §04 + DESIGN.md §2–3 + AGENTS.md §13).
+ * Identitas visual terpusat di :root; palet bawaan Tailwind dimatikan agar konsisten.
  */
 
 :root {
-  /* Netral */
-  --bg-app: #f8fafc; /* slate-50 */
+  /* Netral (REDESIGN-DIRECTION §04.3) */
+  --bg-app: #f7f8fa;
   --bg-surface: #ffffff;
-  --bg-subtle: #f1f5f9; /* slate-100 */
-  --border: #e2e8f0; /* slate-200 */
-  --border-soft: #f1f5f9; /* slate-100 */
-  --text: #0f172a; /* slate-900 */
-  --text-muted: #475569; /* slate-600 */
-  --text-subtle: #64748b; /* slate-500 */
-  --icon-muted: #94a3b8; /* slate-400, hanya ikon dan dekorasi */
+  --bg-subtle: #eef2f7;
+  --border: #dce3ec;
+  --border-soft: #edf1f6;
+  /* Batas kontrol isian (input, select, pilihan status): >= 3:1 terhadap putih (WCAG 1.4.11). */
+  --border-control: #8592a6;
+  --text: #172b4d;
+  --text-muted: #42526e;
+  --text-subtle: #5e6c84;
+  --icon-muted: #7a869a;
 
-  /* Aksi */
-  --primary: #0f172a; /* slate-900 */
-  --primary-hover: #020617;
+  /* Merek & Aksi (REDESIGN-DIRECTION §04.2) */
+  --primary: #4169a1;
+  --primary-hover: #2e5285;
+  --primary-deep: #0f1e32;
   --on-primary: #ffffff;
-  --accent: #4f46e5; /* indigo-600 */
-  --accent-soft: #eef2ff; /* indigo-50 */
-  --focus: #6366f1; /* indigo-500 */
-  --danger: #e11d48; /* rose-600 */
-  --danger-hover: #be123c; /* rose-700 */
-  --overlay: rgb(15 23 42 / 0.5); /* slate-900/50 */
+  --accent: #4169a1;
+  --accent-soft: #eaf1fa;
+  --accent-light: #78a4cb;
+  --focus: #4169a1;
+  --danger: #e11d48;
+  --danger-hover: #be123c;
+  --overlay: rgb(15 30 50 / 0.48);
 
-  /* Status: teks, latar, grafik */
-  --status-hadir-text: #047857; /* emerald-700 */
-  --status-hadir-bg: #ecfdf5; /* emerald-50 */
-  --status-hadir-chart: #10b981; /* emerald-500 */
-  --status-mendampingi-text: #4338ca; /* indigo-700 */
-  --status-mendampingi-bg: #eef2ff; /* indigo-50 */
-  --status-mendampingi-chart: #6366f1; /* indigo-500 */
-  --status-tidak-hadir-text: #be123c; /* rose-700 */
-  --status-tidak-hadir-bg: #fff1f2; /* rose-50 */
-  --status-tidak-hadir-chart: #f43f5e; /* rose-500 */
-  --status-izin-text: #b45309; /* amber-700 */
-  --status-izin-bg: #fffbeb; /* amber-50 */
-  --status-izin-chart: #f59e0b; /* amber-500 */
-  --status-sakit-text: #0369a1; /* sky-700 */
-  --status-sakit-bg: #f0f9ff; /* sky-50 */
-  --status-sakit-chart: #0ea5e9; /* sky-500 */
-  --status-netral-text: #334155; /* slate-700 */
-  --status-netral-bg: #f1f5f9; /* slate-100 */
+  /* Elevasi tenang & terukur */
+  --shadow-card: 0 1px 2px rgb(23 43 77 / 0.04), 0 4px 12px rgb(23 43 77 / 0.03);
+  --shadow-popover: 0 6px 20px rgb(23 43 77 / 0.09), 0 1px 3px rgb(23 43 77 / 0.05);
 
-  /* Gerak halus (DESIGN §11.4) */
+  /*
+   * Status semantik (kontras WCAG AA terjaga). Teks status juga dipakai sebagai isi pekat
+   * pilihan terpilih dengan teks putih (>= 5:1). Mendampingi sengaja violet, bukan biru merek,
+   * agar status tidak tertukar dengan "terpilih", tautan, atau menu aktif.
+   */
+  --status-hadir-text: #16803c;
+  --status-hadir-bg: #ecfdf3;
+  --status-hadir-chart: #22a06b;
+  --status-mendampingi-text: #6d28d9;
+  --status-mendampingi-bg: #f5f3ff;
+  --status-mendampingi-chart: #8b5cf6;
+  --status-tidak-hadir-text: #be123c;
+  --status-tidak-hadir-bg: #fff1f2;
+  --status-tidak-hadir-chart: #e11d48;
+  --status-izin-text: #92400e;
+  --status-izin-bg: #fffbeb;
+  --status-izin-chart: #d97706;
+  --status-sakit-text: #0369a1;
+  --status-sakit-bg: #f0f9ff;
+  --status-sakit-chart: #0284c7;
+  --status-netral-text: #334155;
+  --status-netral-bg: #eef2f7;
+
+  /* Nada umpan balik (bukan status data): peringatan & info. */
+  --peringatan-text: #92400e;
+  --peringatan-bg: #fffbeb;
+  --peringatan-garis: #d97706;
+  --info-text: #2b579a;
+  --info-bg: #eaf1fa;
+
+  /* Sudut (REDESIGN-DIRECTION §4.5): kontrol 10 px, kartu 16 px, lembar/dialog 20 px. */
+  --sudut-kontrol: 0.625rem;
+  --sudut-kartu: 1rem;
+  --sudut-lembar: 1.25rem;
+
+  /* Gerak halus (AGENTS §13 + apple-design) */
   --dur-fast: 150ms;
   --dur-base: 220ms;
   --dur-slow: 320ms;
@@ -54,6 +77,12 @@
 
   /* Tinggi bar navigasi bawah mobile */
   --tinggi-bar-bawah: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+
+  /*
+   * Tinggi header lekat. Nilai awal = min-h-14; Header mengukur tinggi sebenarnya (judul boleh
+   * dua baris) agar judul grup lekat (mis. tanggal di daftar) menempel tepat di bawahnya.
+   */
+  --tinggi-header: 3.5rem;
 }
 
 @theme inline {
@@ -71,6 +100,7 @@
   --color-subtle: var(--bg-subtle);
   --color-line: var(--border);
   --color-line-soft: var(--border-soft);
+  --color-line-kontrol: var(--border-control);
   --color-ink: var(--text);
   --color-ink-muted: var(--text-muted);
   --color-ink-subtle: var(--text-subtle);
@@ -78,9 +108,11 @@
 
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
+  --color-primary-deep: var(--primary-deep);
   --color-on-primary: var(--on-primary);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-accent-light: var(--accent-light);
   --color-focus: var(--focus);
   --color-danger: var(--danger);
   --color-danger-hover: var(--danger-hover);
@@ -103,4 +135,15 @@
   --color-sakit-chart: var(--status-sakit-chart);
   --color-netral: var(--status-netral-text);
   --color-netral-soft: var(--status-netral-bg);
+
+  --color-peringatan: var(--peringatan-text);
+  --color-peringatan-soft: var(--peringatan-bg);
+  --color-peringatan-garis: var(--peringatan-garis);
+  --color-info: var(--info-text);
+  --color-info-soft: var(--info-bg);
+
+  /* rounded-kontrol / rounded-kartu / rounded-lembar */
+  --radius-kontrol: var(--sudut-kontrol);
+  --radius-kartu: var(--sudut-kartu);
+  --radius-lembar: var(--sudut-lembar);
 }

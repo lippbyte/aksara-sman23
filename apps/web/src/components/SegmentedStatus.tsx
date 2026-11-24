@@ -1,3 +1,4 @@
+import { CheckIcon } from '@phosphor-icons/react';
 import { useRef, type KeyboardEvent } from 'react';
 import { cn } from '@/lib/utils';
 import { nadaStatus, type NadaStatus } from './StatusBadge';
@@ -9,7 +10,7 @@ export interface OpsiSegmen<T extends string | number> {
 }
 
 interface SegmentedStatusProps<T extends string | number> {
-  /** Nama kelompok untuk pembaca layar. */
+  /** Nama kelompok untuk pembaca layar (dipakai bila tidak ada `aria-labelledby`). */
   label: string;
   opsi: readonly OpsiSegmen<T>[];
   nilai: T | null;
@@ -21,14 +22,22 @@ interface SegmentedStatusProps<T extends string | number> {
   id?: string;
   'aria-describedby'?: string;
   'aria-invalid'?: boolean;
+  'aria-labelledby'?: string;
+  'aria-required'?: boolean;
 }
 
+/*
+ * Pilihan terpilih memakai isi pekat + teks putih + tanda centang: bedanya terang-gelap dan
+ * bentuk, bukan hanya rona warna (WCAG 1.4.1). Yang tidak terpilih berbingkai >= 3:1 (WCAG 1.4.11).
+ */
 const TERPILIH: Record<NadaStatus, string> = {
-  hadir: 'border-hadir bg-hadir-soft text-hadir',
-  mendampingi: 'border-mendampingi bg-mendampingi-soft text-mendampingi',
-  'tidak-hadir': 'border-tidak-hadir bg-tidak-hadir-soft text-tidak-hadir',
-  izin: 'border-izin bg-izin-soft text-izin',
-  sakit: 'border-sakit bg-sakit-soft text-sakit',
+  hadir: 'border-hadir bg-hadir text-on-primary',
+  mendampingi: 'border-mendampingi bg-mendampingi text-on-primary',
+  'tidak-hadir': 'border-tidak-hadir bg-tidak-hadir text-on-primary',
+  izin: 'border-izin bg-izin text-on-primary',
+  sakit: 'border-sakit bg-sakit text-on-primary',
+  info: 'border-info bg-info text-on-primary',
+  peringatan: 'border-peringatan bg-peringatan text-on-primary',
   netral: 'border-primary bg-primary text-on-primary',
 };
 
@@ -72,11 +81,16 @@ export function SegmentedStatus<T extends string | number>({
       ref={wadah}
       id={id}
       role="radiogroup"
-      aria-label={label}
+      aria-label={aria['aria-labelledby'] ? undefined : label}
+      aria-labelledby={aria['aria-labelledby']}
       aria-describedby={aria['aria-describedby']}
       aria-invalid={aria['aria-invalid']}
+      aria-required={aria['aria-required']}
       onKeyDown={tekan}
-      className={cn('flex gap-1.5', className)}
+      // Kontainer kueri: ukuran teks dan centang mengikuti lebar grup ini sendiri, bukan lebar
+      // layar, karena grup yang sama dipakai di baris daftar sempit maupun dialog lebar.
+      // Tanpa dukungan container query: teks ringkas tanpa centang (isi pekat tetap penanda).
+      className={cn('@container flex gap-1.5', className)}
     >
       {opsi.map((o, i) => {
         const terpilih = o.nilai === nilai;
@@ -91,13 +105,27 @@ export function SegmentedStatus<T extends string | number>({
             tabIndex={terpilih || (indeksAktif === -1 && i === 0) ? 0 : -1}
             onClick={() => onUbah(o.nilai)}
             className={cn(
-              'flex min-w-0 flex-1 items-center justify-center rounded-lg border font-medium transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60',
-              ringkas ? 'h-11 px-1.5 text-xs sm:h-9' : 'h-11 px-2 text-sm',
+              'tombol-tekan flex min-w-0 flex-1 items-center justify-center gap-1 rounded-kontrol border px-1.5 disabled:cursor-not-allowed disabled:opacity-60',
+              ringkas
+                ? 'h-11 text-xs pointer-fine:h-9'
+                : // Tiga pilihan atau lebih (mis. "Mendampingi") mengecil di grup sempit agar tidak terpotong.
+                  cn('h-11 text-sm', opsi.length >= 3 && '@max-[22rem]:text-xs'),
               terpilih
-                ? TERPILIH[o.nada ?? nadaStatus(String(o.nilai))]
-                : 'border-line bg-surface text-ink-muted hover:bg-app hover:text-ink',
+                ? cn('font-semibold', TERPILIH[o.nada ?? nadaStatus(String(o.nilai))])
+                : 'border-line-kontrol bg-surface font-medium text-ink-muted hover:border-accent hover:text-ink',
             )}
           >
+            {terpilih && (
+              <CheckIcon
+                weight="fill"
+                // Centang hanya bila muat; label lebih penting daripada centang.
+                className={cn(
+                  'hidden size-3.5 shrink-0',
+                  ringkas ? '@min-[18rem]:block' : '@min-[30rem]:block',
+                )}
+                aria-hidden="true"
+              />
+            )}
             <span className="truncate">{o.label}</span>
           </button>
         );

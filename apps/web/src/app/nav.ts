@@ -1,23 +1,33 @@
 import type { Role } from '@sms/shared';
 import {
-  Award,
-  CalendarCheck,
-  ClipboardCheck,
-  FileText,
-  History,
-  LayoutDashboard,
-  Settings,
-  Users,
-  UsersRound,
-  type LucideIcon,
-} from 'lucide-react';
+  CalendarCheckIcon,
+  ChalkboardTeacherIcon,
+  ClockCounterClockwiseIcon,
+  FileTextIcon,
+  GearSixIcon,
+  MedalIcon,
+  SquaresFourIcon,
+  StudentIcon,
+  UsersThreeIcon,
+  type Icon as Ikon,
+} from '@phosphor-icons/react';
+
+/** Kelompok menu sidebar (REDESIGN-DIRECTION §9.1): pekerjaan harian, pantauan, administrasi. */
+export type GrupNav = 'harian' | 'pantauan' | 'administrasi';
+
+export const LABEL_GRUP: Record<GrupNav, string> = {
+  harian: 'Harian',
+  pantauan: 'Rekap & Penilaian',
+  administrasi: 'Administrasi',
+};
 
 export interface NavItem {
   path: string;
   label: string;
   /** Label ringkas untuk bar navigasi bawah mobile (DESIGN §11.2). */
   labelPendek: string;
-  icon: LucideIcon;
+  icon: Ikon;
+  grup: GrupNav;
   /** Peran yang melihat menu ini. Hanya cermin matriks akses; pengaman ada di server. */
   roles: readonly Role[];
 }
@@ -31,63 +41,72 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/',
     label: 'Dashboard Utama',
     labelPendek: 'Beranda',
-    icon: LayoutDashboard,
+    icon: SquaresFourIcon,
+    grup: 'harian',
     roles: SEMUA,
   },
   {
     path: '/absensi-guru',
     label: 'Absensi Guru',
     labelPendek: 'Absensi Guru',
-    icon: ClipboardCheck,
+    icon: ChalkboardTeacherIcon,
+    grup: 'harian',
     roles: SEMUA,
   },
   {
     path: '/absensi-siswa',
     label: 'Absensi Siswa',
     labelPendek: 'Absensi Siswa',
-    icon: Users,
+    icon: StudentIcon,
+    grup: 'harian',
     roles: ['admin', 'manajemen_guru', 'sekretaris_kelas'],
   },
   {
     path: '/rekap-kehadiran',
     label: 'Rekap Kehadiran Guru',
     labelPendek: 'Rekap',
-    icon: CalendarCheck,
+    icon: CalendarCheckIcon,
+    grup: 'pantauan',
     roles: PIMPINAN,
   },
   {
     path: '/penilaian-kinerja',
     label: 'Penilaian Kinerja',
     labelPendek: 'Penilaian',
-    icon: Award,
+    icon: MedalIcon,
+    grup: 'pantauan',
     roles: ['admin', 'manajemen_guru', 'guru_penilai'],
   },
   {
     path: '/penilaian-mgmp',
     label: 'Penilaian MGMP',
     labelPendek: 'MGMP',
-    icon: UsersRound,
+    icon: UsersThreeIcon,
+    grup: 'pantauan',
     roles: SEMUA,
   },
   {
     path: '/laporan-siswa',
     label: 'Laporan Rekap Siswa',
     labelPendek: 'Laporan',
-    icon: FileText,
+    icon: FileTextIcon,
+    grup: 'pantauan',
     roles: PIMPINAN,
   },
   {
     path: '/log-aktivitas',
     label: 'Log Aktivitas',
     labelPendek: 'Log',
-    icon: History,
+    icon: ClockCounterClockwiseIcon,
+    grup: 'administrasi',
     roles: ['admin'],
   },
   {
     path: '/pengaturan',
     label: 'Pengaturan',
     labelPendek: 'Pengaturan',
-    icon: Settings,
+    icon: GearSixIcon,
+    grup: 'administrasi',
     roles: ['admin'],
   },
 ];
@@ -101,6 +120,14 @@ export const HALAMAN_PENGGUNA: { path: string; label: string }[] = [
 
 export function menuUntuk(role: Role): NavItem[] {
   return NAV_ITEMS.filter((item) => item.roles.includes(role));
+}
+
+/** Menu sidebar dikelompokkan; kelompok tanpa menu untuk peran itu tidak ditampilkan. */
+export function menuBergrupUntuk(role: Role): { grup: GrupNav; label: string; item: NavItem[] }[] {
+  const menu = menuUntuk(role);
+  return (Object.keys(LABEL_GRUP) as GrupNav[])
+    .map((grup) => ({ grup, label: LABEL_GRUP[grup], item: menu.filter((m) => m.grup === grup) }))
+    .filter((g) => g.item.length > 0);
 }
 
 /** Konfigurasi slot 1–4 bar bawah per peran (DESIGN §11.2). */

@@ -15,7 +15,7 @@ export function DropdownMenuContent({
       <DropdownPrimitive.Content
         sideOffset={sideOffset}
         className={cn(
-          'z-50 min-w-44 rounded-lg border border-line bg-surface p-1 text-sm text-ink shadow-md',
+          'z-50 min-w-44 rounded-kontrol border border-line bg-surface p-1 text-sm text-ink shadow-md',
           className,
         )}
         {...props}
@@ -31,7 +31,8 @@ export function DropdownMenuItem({
   return (
     <DropdownPrimitive.Item
       className={cn(
-        'flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-ink-muted outline-none select-none data-[highlighted]:bg-subtle data-[highlighted]:text-ink [&_svg]:size-4',
+        // Sorotan (data-highlighted) menggantikan outline fokus; target 44 px di layar sentuh.
+        'flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-ink-muted outline-none select-none data-[highlighted]:bg-subtle data-[highlighted]:text-ink pointer-fine:min-h-9 [&_svg]:size-4',
         className,
       )}
       {...props}

@@ -66,9 +66,19 @@ for (const peran of PERAN) {
     await expect(page.getByRole('heading', { name: peran.ada })).toBeVisible();
     await expect(page.getByRole('heading', { name: peran.tidakAda })).toHaveCount(0);
 
-    // Menu pengguna menyebut peran (dan kelas untuk sekretaris).
-    await page.getByRole('button', { name: 'Menu pengguna' }).click();
-    await expect(page.getByRole('menu')).toContainText(peran.label);
+    // Identitas akun menyebut peran (dan kelas untuk sekretaris): menu pengguna di header
+    // (desktop) atau kepala lembar "Lainnya"/"Akun" di bar bawah (mobile, satu-satunya menu akun).
+    const menuHeader = page.getByRole('button', { name: 'Menu pengguna' });
+    if (await menuHeader.isVisible()) {
+      await menuHeader.click();
+      await expect(page.getByRole('menu')).toContainText(peran.label);
+    } else {
+      await page
+        .getByRole('navigation', { name: 'Navigasi utama' })
+        .getByRole('button', { name: /^(Lainnya|Akun)$/ })
+        .click();
+      await expect(page.getByRole('dialog')).toContainText(peran.label);
+    }
     await page.keyboard.press('Escape');
 
     await keluar(page);

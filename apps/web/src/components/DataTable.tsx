@@ -1,5 +1,11 @@
 import { tableFeatures, useTable, type ColumnDef, type RowData } from '@tanstack/react-table';
-import { ChevronLeft, ChevronRight, Inbox, TriangleAlert, type LucideIcon } from 'lucide-react';
+import {
+  CaretLeftIcon,
+  CaretRightIcon,
+  TrayIcon,
+  WarningIcon,
+  type Icon as Ikon,
+} from '@phosphor-icons/react';
 import { useEffect, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { angka } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -32,8 +38,40 @@ interface DataTableProps<T> {
   onCobaLagi?: () => void;
   /** Keterangan tabel untuk pembaca layar. */
   keterangan: string;
-  kosong?: { icon?: LucideIcon; pesan: string; aksi?: ReactNode };
+  kosong?: { icon?: Ikon; pesan: string; aksi?: ReactNode };
   barisSkeleton?: number;
+  /**
+   * Kartu ponsel khusus halaman (<768 px). Tanpa ini, kartu generik menampilkan semua kolom
+   * sebagai pasangan label/nilai. Tabel desktop tidak terpengaruh.
+   */
+  kartuMobile?: (baris: T) => ReactNode;
+  /**
+   * Kelompokkan kartu ponsel berurutan dengan judul lekat (mis. per tanggal). Data harus sudah
+   * terurut menurut kunci kelompok; baris berurutan dengan kunci sama menjadi satu kelompok.
+   */
+  grupMobile?: GrupMobile<T>;
+}
+
+export interface GrupMobile<T> {
+  kunci: (baris: T) => string;
+  judul: (kunci: string) => ReactNode;
+  /** Tingkat judul kelompok mengikuti struktur halaman (bawaan 2). */
+  level?: 2 | 3;
+}
+
+/** Pecah baris terurut menjadi kelompok berurutan dengan kunci yang sama. */
+export function kelompokkanBerurutan<T>(
+  baris: readonly T[],
+  kunci: (b: T) => string,
+): { kunci: string; isi: T[] }[] {
+  const hasil: { kunci: string; isi: T[] }[] = [];
+  for (const b of baris) {
+    const k = kunci(b);
+    const akhir = hasil.at(-1);
+    if (akhir && akhir.kunci === k) akhir.isi.push(b);
+    else hasil.push({ kunci: k, isi: [b] });
+  }
+  return hasil;
 }
 
 /** Tabel data (TanStack Table); di ponsel berubah menjadi daftar kartu (DESIGN §6 & §11.5). */
@@ -47,7 +85,10 @@ export function DataTable<T extends RowData>({
   keterangan,
   kosong,
   barisSkeleton = 6,
+  kartuMobile,
+  grupMobile,
 }: DataTableProps<T>) {
+  const idDaftar = useId();
   const columns = useMemo<ColumnDef<typeof fitur, T>[]>(
     () =>
       kolom.map((k) => ({
@@ -69,7 +110,9 @@ export function DataTable<T extends RowData>({
   if (galat) {
     return (
       <EmptyState
-        icon={TriangleAlert}
+        icon={WarningIcon}
+        nada="galat"
+        judul="Data gagal dimuat"
         pesan={galat}
         aksi={
           onCobaLagi && (
@@ -85,7 +128,7 @@ export function DataTable<T extends RowData>({
   if (memuat && !data) {
     return (
       <div
-        className="rounded-xl border border-line bg-surface p-4"
+        className="rounded-kartu border border-line bg-surface p-4"
         role="status"
         aria-label="Memuat data"
       >
@@ -101,7 +144,7 @@ export function DataTable<T extends RowData>({
   if (baris.length === 0) {
     return (
       <EmptyState
-        icon={kosong?.icon ?? Inbox}
+        icon={kosong?.icon ?? TrayIcon}
         pesan={kosong?.pesan ?? 'Belum ada data.'}
         aksi={kosong?.aksi}
       />
@@ -112,19 +155,24 @@ export function DataTable<T extends RowData>({
   const rows = table.getRowModel().rows;
 
   return (
-    <div className={cn(memuat && 'opacity-60 transition-opacity duration-200')}>
+    <div
+      aria-busy={memuat || undefined}
+      className={cn(memuat && 'opacity-60 transition-opacity duration-200')}
+    >
       {/* Desktop dan tablet (>=768 px): tabel dengan kontainer gulir aksesibel papan ketik */}
       <div
         tabIndex={0}
-        role="group"
+        role="region"
         aria-label={keterangan}
-        className="hidden overflow-x-auto rounded-xl border border-line bg-surface md:block"
+        // `relative`: elemen sr-only (absolute) di dalam tabel tetap terkurung wadah gulir;
+        // tanpa ini teks "Aksi" di ujung kanan tabel melebarkan halaman di 768–1023 px.
+        className="gulir-stabil relative hidden overflow-x-auto rounded-kartu border border-line bg-surface shadow-[var(--shadow-card)] md:block"
       >
         <table className="w-full text-left text-sm">
           <caption className="sr-only">{keterangan}</caption>
           <thead>
             {table.getHeaderGroups().map((grup) => (
-              <tr key={grup.id} className="border-b border-line">
+              <tr key={grup.id} className="border-b border-line bg-subtle/55">
                 {grup.headers.map((h) => {
                   const k = peta.get(h.column.id);
                   return (
@@ -132,7 +180,7 @@ export function DataTable<T extends RowData>({
                       key={h.id}
                       scope="col"
                       className={cn(
-                        'px-3 py-2.5 text-2xs font-semibold tracking-wider whitespace-nowrap text-ink-subtle uppercase',
+                        'px-4 py-3 text-2xs font-semibold tracking-wider whitespace-nowrap text-ink-subtle uppercase',
                         k?.angka && 'text-right',
                         k?.aksi && 'text-right',
                       )}
@@ -146,12 +194,12 @@ export function DataTable<T extends RowData>({
           </thead>
           <tbody className="divide-y divide-line-soft">
             {rows.map((row) => (
-              <tr key={row.id} className="transition-colors duration-200 hover:bg-app">
+              <tr key={row.id} className="transition-colors duration-150 hover:bg-accent-soft/45">
                 {kolom.map((k) => (
                   <td
                     key={k.id}
                     className={cn(
-                      'px-3 py-2.5 align-middle text-ink',
+                      'px-4 py-3 align-middle text-ink',
                       k.angka && 'text-right tabular-nums',
                       k.aksi && 'text-right whitespace-nowrap',
                       k.className,
@@ -166,39 +214,91 @@ export function DataTable<T extends RowData>({
         </table>
       </div>
 
-      {/* Ponsel (<768 px): daftar kartu */}
-      <ul className="flex flex-col gap-3 md:hidden" aria-label={keterangan}>
-        {rows.map((row) => {
-          const utama = kolom.find((k) => k.utama) ?? kolom[0];
-          const aksi = kolom.filter((k) => k.aksi);
-          const lain = kolom.filter((k) => k !== utama && !k.aksi);
-          return (
-            <li key={row.id} className="rounded-xl border border-line bg-surface p-4">
-              {utama && (
-                <div className="text-sm font-semibold text-ink">{utama.sel(row.original)}</div>
-              )}
-              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
-                {lain.map((k) => (
-                  <div key={k.id} className="contents">
-                    <dt className="text-ink-subtle">{k.judul}</dt>
-                    <dd className={cn('min-w-0 text-right text-ink', k.angka && 'tabular-nums')}>
-                      {k.sel(row.original)}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              {aksi.length > 0 && (
-                <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-line-soft pt-3">
-                  {aksi.map((k) => (
-                    <div key={k.id}>{k.sel(row.original)}</div>
-                  ))}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      {/* Ponsel (<768 px): daftar kartu, opsional dikelompokkan dengan judul lekat */}
+      <div className="md:hidden">
+        {grupMobile ? (
+          kelompokkanBerurutan(rows, (r) => grupMobile.kunci(r.original)).map((g, i) => {
+            const Judul = grupMobile.level === 3 ? 'h3' : 'h2';
+            const idJudul = `${idDaftar}-grup-${i}`;
+            return (
+              <section key={g.kunci} aria-labelledby={idJudul} className="mb-4 last:mb-0">
+                {/* Lekat di bawah header (tinggi diukur Header) agar konteks tidak hilang saat
+                    menggulir; latar solid agar kartu yang lewat di bawahnya tidak tembus. */}
+                <Judul
+                  id={idJudul}
+                  className="sticky top-(--tinggi-header) z-10 -mx-4 bg-app px-4 py-2 text-xs font-semibold text-ink-muted sm:-mx-6 sm:px-6"
+                >
+                  {grupMobile.judul(g.kunci)}
+                </Judul>
+                <DaftarKartu
+                  baris={g.isi}
+                  kolom={kolom}
+                  kartuMobile={kartuMobile}
+                  label={keterangan}
+                />
+              </section>
+            );
+          })
+        ) : (
+          <DaftarKartu baris={rows} kolom={kolom} kartuMobile={kartuMobile} label={keterangan} />
+        )}
+      </div>
     </div>
+  );
+}
+
+function DaftarKartu<T>({
+  baris,
+  kolom,
+  kartuMobile,
+  label,
+}: {
+  baris: { id: string; original: T }[];
+  kolom: Kolom<T>[];
+  kartuMobile?: (baris: T) => ReactNode;
+  label: string;
+}) {
+  return (
+    <ul className={cn('flex flex-col', kartuMobile ? 'gap-2' : 'gap-3')} aria-label={label}>
+      {baris.map((row) => (
+        <li key={row.id}>
+          {kartuMobile ? (
+            kartuMobile(row.original)
+          ) : (
+            <KartuGenerik baris={row.original} kolom={kolom} />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Kartu bawaan: semua kolom sebagai pasangan label/nilai. */
+function KartuGenerik<T>({ baris, kolom }: { baris: T; kolom: Kolom<T>[] }) {
+  const utama = kolom.find((k) => k.utama) ?? kolom[0];
+  const aksi = kolom.filter((k) => k.aksi);
+  const lain = kolom.filter((k) => k !== utama && !k.aksi);
+  return (
+    <article className="kartu-kontainer rounded-kartu border border-line bg-surface p-4 shadow-[var(--shadow-card)]">
+      {utama && <div className="text-sm font-semibold text-ink">{utama.sel(baris)}</div>}
+      <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-xs">
+        {lain.map((k) => (
+          <div key={k.id} className="contents">
+            <dt className="text-ink-subtle">{k.judul}</dt>
+            <dd className={cn('min-w-0 text-right text-ink', k.angka && 'tabular-nums')}>
+              {k.sel(baris)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {aksi.length > 0 && (
+        <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-line-soft pt-3">
+          {aksi.map((k) => (
+            <div key={k.id}>{k.sel(baris)}</div>
+          ))}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -250,7 +350,7 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
           disabled={page <= 1}
           onClick={() => onUbah(page - 1)}
         >
-          <ChevronLeft aria-hidden="true" />
+          <CaretLeftIcon aria-hidden="true" />
           Sebelumnya
         </Button>
 
@@ -261,18 +361,18 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
             </label>
             <input
               id={idLoncat}
+              name="halaman"
               type="number"
               inputMode="numeric"
               min={1}
               max={jumlahHalaman}
-              aria-label="Loncat ke halaman"
               value={inputHalaman}
               onChange={(e) => setInputHalaman(e.target.value)}
               onBlur={() => lompat()}
-              className="h-11 w-14 rounded-lg border border-line bg-surface px-2 text-center text-sm text-ink tabular-nums sm:h-9"
+              className="isian-kontrol h-11 w-14 rounded-kontrol border border-line-kontrol bg-surface px-2 text-center text-sm text-ink tabular-nums pointer-fine:h-9"
             />
             <span className="text-ink-subtle tabular-nums">/ {angka(jumlahHalaman)}</span>
-            <Button type="submit" variant="secondary" size="sm" className="h-11 px-2.5 sm:h-9">
+            <Button type="submit" variant="secondary" className="min-w-11 px-3">
               Ke
             </Button>
           </form>
@@ -289,7 +389,7 @@ export function Pagination({ page, pageSize, total, onUbah }: PaginationProps) {
           onClick={() => onUbah(page + 1)}
         >
           Berikutnya
-          <ChevronRight aria-hidden="true" />
+          <CaretRightIcon aria-hidden="true" />
         </Button>
       </div>
     </nav>

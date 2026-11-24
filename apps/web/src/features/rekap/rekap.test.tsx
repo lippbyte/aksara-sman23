@@ -14,10 +14,11 @@ describe('ProgressBar', () => {
   it.each([
     [100, 'hadir'],
     [90, 'hadir'],
-    [89.99, 'mendampingi'],
-    [75, 'mendampingi'],
-    [74.99, 'izin'],
-    [60, 'izin'],
+    // Tingkat persentase memakai nada info/peringatan, bukan warna status Mendampingi/Izin.
+    [89.99, 'info'],
+    [75, 'info'],
+    [74.99, 'peringatan'],
+    [60, 'peringatan'],
     [59.99, 'tidak-hadir'],
     [0, 'tidak-hadir'],
   ])('%s%% → warna %s', (nilai, nada) => {
@@ -184,6 +185,30 @@ describe('halaman Rekap Kehadiran Guru', () => {
     expect(within(tabel).getAllByText('Data berubah sejak dikoreksi')).toHaveLength(1);
   });
 
+  it('kartu ponsel: jam hadir/wajib, batang persentase, dan tanda koreksi tetap terbawa', async () => {
+    pasangApiTiruan('manajemen_guru', penjawab);
+    tampilkanApp('/rekap-kehadiran?pekan=2026-4');
+    const biasa = await screen.findByRole('article', { name: 'Guru Contoh 03' });
+    expect(within(biasa).getByText('G03 · Fisika')).toBeInTheDocument();
+    expect(within(biasa).getByText('Hadir 7 dari 8 JP wajib')).toBeInTheDocument();
+    expect(
+      within(biasa).getByRole('progressbar', { name: 'Kehadiran Guru Contoh 03' }),
+    ).toBeInTheDocument();
+    expect(within(biasa).queryByText('Dikoreksi manual')).not.toBeInTheDocument();
+
+    const koreksi = screen.getByRole('article', { name: 'Guru Contoh 04' });
+    expect(within(koreksi).getByText('Dikoreksi manual')).toBeInTheDocument();
+    expect(within(koreksi).getByText('Data berubah sejak dikoreksi')).toBeInTheDocument();
+    expect(
+      within(koreksi).getByText(
+        'Hadir 7 dari 8 JP wajib · Alasan: Mengajar pengganti (contoh) (Admin Contoh)',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(koreksi).getByRole('button', { name: 'Koreksi rekap Guru Contoh 04' }),
+    ).toBeInTheDocument();
+  });
+
   it('dialog sinkron menyebut jumlah baris terkoreksi; manajemen tidak bisa menimpa', async () => {
     terkoreksi = 3;
     pasangApiTiruan('manajemen_guru', penjawab);
@@ -270,7 +295,7 @@ describe('halaman Rekap Kehadiran Guru', () => {
     pasangApiTiruan('guru_penilai', penjawab);
     tampilkanApp('/rekap-kehadiran');
     expect(
-      await screen.findByText('Peran Anda tidak memiliki akses ke halaman ini.'),
+      await screen.findByText('Halaman ini tidak tersedia untuk peran Anda'),
     ).toBeInTheDocument();
   });
 });

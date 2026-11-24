@@ -1,21 +1,23 @@
 import {
   BATAS_UKURAN_CSV_BYTE,
+  BATAS_UKURAN_XLSX_BYTE,
   JENIS_IMPOR,
   type HasilHapusPilot,
   type HasilPratinjauImpor,
   type HasilSimpanImpor,
   type JenisImpor,
+  type PratinjauImporInput,
   type Respons,
 } from '@sms/shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle,
-  CheckCircle2,
-  Download,
-  FileSpreadsheet,
-  Trash2,
-  Upload,
-} from 'lucide-react';
+  CheckCircleIcon,
+  DownloadSimpleIcon,
+  FileXlsIcon,
+  TrashIcon,
+  UploadSimpleIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -31,18 +33,48 @@ import { cn } from '@/lib/utils';
 const LABEL_JENIS: Record<JenisImpor, { judul: string; keterangan: string }> = {
   guru: {
     judul: 'Guru',
-    keterangan: 'Kunci unik: kode_guru. Kolom wajib: kode_guru, nama_guru, mata_pelajaran.',
+    keterangan:
+      'Format Excel (.xlsx) atau CSV. Mengambil Nama Pengajar (nama_guru), Mata Pelajaran, dan Kode (kode_guru). Kolom lain diabaikan; jadwal mengajar per kelas dapat diatur menyusul di tab Jadwal.',
   },
   siswa: {
-    judul: 'Siswa',
-    keterangan: 'Kunci unik: nis. Kolom wajib: nis, nama_siswa, jenis_kelamin (L/P), nama_kelas.',
+    judul: 'Siswa (X, XI, XII)',
+    keterangan:
+      'Format Excel (.xlsx) multi-sheet maupun satu sheet, atau CSV. Mengambil NIS, NAMA, JK (L/P), Kelas (atau dari nama sheet), Wali Kelas, dan Guru BK.',
   },
   jadwal: {
     judul: 'Jadwal mengajar',
     keterangan:
-      'Kunci unik: (kode_guru, hari, jam_ke). Kolom wajib: kode_guru, nama_kelas, hari, jam_ke, total_jam_mengajar.',
+      'Format Excel (.xlsx) atau CSV. Mengambil Kode Guru, Kelas, Hari (Senin–Sabtu / 1–6), Jam Ke, dan Total JP.',
   },
 };
+
+const LABEL_KOLOM_PRATINJAU: Record<string, string> = {
+  kode_guru: 'Kode',
+  nama_guru: 'Nama Pengajar',
+  mata_pelajaran: 'Mata Pelajaran',
+  nama_mgmp: 'MGMP',
+  nis: 'NIS',
+  nama_siswa: 'Nama Siswa',
+  jenis_kelamin: 'JK',
+  nama_kelas: 'Kelas',
+  wali_kelas: 'Wali Kelas',
+  bk: 'Guru BK',
+  hari: 'Hari',
+  jam_ke: 'Jam Ke',
+  total_jam_mengajar: 'Total JP',
+  status: 'Status',
+  aksi: 'Aksi',
+};
+
+function ubahKeBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const bagian: string[] = [];
+  const langkah = 0x8000;
+  for (let i = 0; i < bytes.length; i += langkah) {
+    bagian.push(String.fromCharCode(...bytes.subarray(i, i + langkah)));
+  }
+  return btoa(bagian.join(''));
+}
 
 export function TabImporData() {
   const { sekolah } = useAuth();
@@ -51,7 +83,7 @@ export function TabImporData() {
 
   const [jenis, setJenis] = useState<JenisImpor>('guru');
   const [namaBerkas, setNamaBerkas] = useState<string | null>(null);
-  const [isiCsv, setIsiCsv] = useState<string | null>(null);
+  const [muatanBerkas, setMuatanBerkas] = useState<PratinjauImporInput | null>(null);
   const [pratinjau, setPratinjau] = useState<HasilPratinjauImpor | null>(null);
   const [izinkanRef, setIzinkanRef] = useState(false);
 
@@ -59,8 +91,8 @@ export function TabImporData() {
   const [konfirmasiNama, setKonfirmasiNama] = useState('');
 
   const mutasiPratinjau = useMutation({
-    mutationFn: ({ target, csv }: { target: JenisImpor; csv: string }) =>
-      api.post<Respons<HasilPratinjauImpor>>(`/settings/impor/${target}/pratinjau`, { csv }),
+    mutationFn: ({ target, muatan }: { target: JenisImpor; muatan: PratinjauImporInput }) =>
+      api.post<Respons<HasilPratinjauImpor>>(`/settings/impor/${target}/pratinjau`, muatan),
     onSuccess: (res) => {
       setPratinjau(res.data);
       setIzinkanRef(false);
@@ -73,9 +105,9 @@ export function TabImporData() {
 
   const mutasiSimpan = useMutation({
     mutationFn: () => {
-      if (!isiCsv) throw new Error('Pilih berkas CSV terlebih dahulu.');
+      if (!muatanBerkas) throw new Error('Pilih berkas Excel (.xlsx) atau CSV terlebih dahulu.');
       return api.post<Respons<HasilSimpanImpor>>(`/settings/impor/${jenis}/simpan`, {
-        csv: isiCsv,
+        ...muatanBerkas,
         izinkan_buat_referensi: izinkanRef,
       });
     },
@@ -85,7 +117,7 @@ export function TabImporData() {
         `Impor ${LABEL_JENIS[d.jenis].judul.toLowerCase()} tersimpan: ${angka(d.baru)} baru, ${angka(d.diperbarui)} diperbarui.`,
       );
       setPratinjau(null);
-      setIsiCsv(null);
+      setMuatanBerkas(null);
       setNamaBerkas(null);
       setIzinkanRef(false);
       void queryClient.invalidateQueries({ queryKey: ['pengaturan'] });
@@ -114,30 +146,60 @@ export function TabImporData() {
   function gantiJenis(baru: JenisImpor) {
     setJenis(baru);
     setPratinjau(null);
-    setIsiCsv(null);
+    setMuatanBerkas(null);
     setNamaBerkas(null);
     setIzinkanRef(false);
   }
 
-  function pilihBerkas(berkas: File | undefined) {
+  async function pilihBerkas(berkas: File | undefined) {
     if (!berkas) return;
-    if (!berkas.name.toLowerCase().endsWith('.csv') && berkas.type !== 'text/csv') {
-      toast.error('Berkas harus berformat CSV (UTF-8).');
+    const namaLower = berkas.name.toLowerCase();
+
+    if (namaLower.endsWith('.xls')) {
+      toast.error('Format .xls lama belum didukung. Simpan ulang berkas sebagai .xlsx atau CSV.');
       return;
     }
+
+    const adalahXlsx =
+      namaLower.endsWith('.xlsx') ||
+      berkas.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const adalahCsv = namaLower.endsWith('.csv') || berkas.type === 'text/csv';
+
+    if (!adalahXlsx && !adalahCsv) {
+      toast.error('Berkas harus berformat Excel (.xlsx) atau CSV (UTF-8).');
+      return;
+    }
+
+    if (adalahXlsx) {
+      if (berkas.size > BATAS_UKURAN_XLSX_BYTE) {
+        toast.error('Ukuran berkas Excel maksimal 4 MB.');
+        return;
+      }
+      try {
+        const buffer = await berkas.arrayBuffer();
+        const muatan: PratinjauImporInput = { xlsx_base64: ubahKeBase64(buffer) };
+        setNamaBerkas(berkas.name);
+        setMuatanBerkas(muatan);
+        mutasiPratinjau.mutate({ target: jenis, muatan });
+      } catch {
+        toast.error('Berkas Excel tidak dapat dibaca.');
+      }
+      return;
+    }
+
     if (berkas.size > BATAS_UKURAN_CSV_BYTE) {
       toast.error('Ukuran berkas CSV maksimal 2 MB.');
       return;
     }
-    const pembaca = new FileReader();
-    pembaca.onload = () => {
-      const teks = typeof pembaca.result === 'string' ? pembaca.result : '';
+    try {
+      const teks = await berkas.text();
+      const muatan: PratinjauImporInput = { csv: teks };
       setNamaBerkas(berkas.name);
-      setIsiCsv(teks);
-      mutasiPratinjau.mutate({ target: jenis, csv: teks });
-    };
-    pembaca.onerror = () => toast.error('Berkas CSV tidak dapat dibaca.');
-    pembaca.readAsText(berkas, 'utf-8');
+      setMuatanBerkas(muatan);
+      mutasiPratinjau.mutate({ target: jenis, muatan });
+    } catch {
+      toast.error('Berkas CSV tidak dapat dibaca.');
+    }
   }
 
   const butuhKonfirmasiRef =
@@ -154,8 +216,8 @@ export function TabImporData() {
     <div className="grid max-w-4xl gap-4">
       <Card>
         <CardHeader
-          judul="Impor data master (CSV UTF-8)"
-          keterangan="Unggah berkas CSV sesuai templat, periksa pratinjau validasi, lalu konfirmasi. Data disimpan seluruhnya dalam satu transaksi tanpa simpan parsial."
+          judul="Impor data master (Excel .xlsx / CSV)"
+          keterangan="Unggah berkas Excel (.xlsx) atau CSV sesuai templat, periksa pratinjau validasi, lalu konfirmasi. Data disimpan seluruhnya dalam satu transaksi tanpa simpan parsial."
         />
         <CardBody className="flex flex-col gap-4">
           {/* Pilihan jenis impor */}
@@ -170,7 +232,7 @@ export function TabImporData() {
                   aria-checked={aktif}
                   onClick={() => gantiJenis(j)}
                   className={cn(
-                    'tombol-tekan min-h-11 rounded-lg border px-3.5 text-sm font-medium sm:min-h-9',
+                    'tombol-tekan min-h-11 rounded-kontrol border px-3.5 text-sm font-medium pointer-fine:min-h-9',
                     aktif
                       ? 'border-accent bg-accent-soft text-accent'
                       : 'border-line bg-surface text-ink-muted hover:bg-app hover:text-ink',
@@ -182,12 +244,19 @@ export function TabImporData() {
             })}
           </div>
 
-          <p className="text-xs text-ink-muted">{LABEL_JENIS[jenis].keterangan}</p>
+          <p className="text-xs leading-relaxed text-ink-muted">{LABEL_JENIS[jenis].keterangan}</p>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="secondary" size="touch">
+              <a href={`/api/v1/settings/impor/${jenis}/templat?format=xlsx`} download>
+                <DownloadSimpleIcon aria-hidden="true" />
+                Unduh templat Excel (.xlsx)
+              </a>
+            </Button>
+
+            <Button asChild variant="secondary" size="touch">
               <a href={`/api/v1/settings/impor/${jenis}/templat`} download>
-                <Download aria-hidden="true" />
+                <DownloadSimpleIcon aria-hidden="true" />
                 Unduh templat CSV
               </a>
             </Button>
@@ -195,11 +264,11 @@ export function TabImporData() {
             <input
               ref={inputBerkas}
               type="file"
-              accept=".csv,text/csv"
+              accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
               className="sr-only"
-              aria-label={`Pilih berkas CSV ${LABEL_JENIS[jenis].judul}`}
+              aria-label={`Pilih berkas Excel atau CSV ${LABEL_JENIS[jenis].judul}`}
               onChange={(e) => {
-                pilihBerkas(e.target.files?.[0]);
+                void pilihBerkas(e.target.files?.[0]);
                 e.target.value = '';
               }}
             />
@@ -208,13 +277,13 @@ export function TabImporData() {
               loading={mutasiPratinjau.isPending}
               onClick={() => inputBerkas.current?.click()}
             >
-              <Upload aria-hidden="true" />
-              Pilih berkas CSV
+              <UploadSimpleIcon aria-hidden="true" />
+              Pilih berkas Excel / CSV
             </Button>
 
             {namaBerkas && (
               <span className="inline-flex items-center gap-1.5 text-xs text-ink-muted">
-                <FileSpreadsheet className="size-4 text-icon-muted" aria-hidden="true" />
+                <FileXlsIcon className="size-4 text-icon-muted" aria-hidden="true" />
                 {namaBerkas}
               </span>
             )}
@@ -222,14 +291,14 @@ export function TabImporData() {
 
           {/* Hasil pratinjau */}
           {pratinjau && (
-            <div className="flex flex-col gap-3 rounded-xl border border-line bg-app/50 p-4">
+            <div className="flex flex-col gap-3 rounded-kartu border border-line bg-app/50 p-4">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <KotakRingkasan label="Total baris" nilai={pratinjau.ringkasan.total} />
                 <KotakRingkasan label="Baru" nilai={pratinjau.ringkasan.baru} nada="hadir" />
                 <KotakRingkasan
                   label="Diperbarui"
                   nilai={pratinjau.ringkasan.diperbarui}
-                  nada="mendampingi"
+                  nada="info"
                 />
                 <KotakRingkasan
                   label="Ditolak"
@@ -239,7 +308,7 @@ export function TabImporData() {
               </div>
 
               {butuhKonfirmasiRef && (
-                <div className="rounded-lg border border-line bg-izin-soft p-3 text-xs text-ink">
+                <div className="rounded-kontrol border border-line bg-peringatan-soft p-3 text-xs text-ink">
                   <p className="font-semibold">Referensi baru yang akan dibuat:</p>
                   <ul className="mt-1 list-inside list-disc text-ink-muted">
                     {pratinjau.referensi_baru.kelas.length > 0 && (
@@ -260,12 +329,12 @@ export function TabImporData() {
               )}
 
               {pratinjau.galat.length > 0 && (
-                <div className="rounded-lg border border-line bg-tidak-hadir-soft p-3">
+                <div className="rounded-kontrol border border-line bg-tidak-hadir-soft p-3">
                   <p className="mb-2 text-xs font-semibold text-tidak-hadir">
-                    Ditemukan {angka(pratinjau.total_galat)} baris galat. Perbaiki berkas CSV lalu
+                    Ditemukan {angka(pratinjau.total_galat)} baris galat. Perbaiki berkas lalu
                     unggah ulang:
                   </p>
-                  <div className="max-h-52 overflow-y-auto rounded-lg border border-line bg-surface">
+                  <div className="max-h-52 overflow-y-auto rounded-kontrol border border-line bg-surface">
                     <table className="w-full text-left text-xs">
                       <thead className="border-b border-line bg-subtle text-ink-subtle uppercase">
                         <tr>
@@ -295,13 +364,13 @@ export function TabImporData() {
                   <p className="mb-1.5 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
                     Pratinjau baris sah (maks. 10 baris pertama)
                   </p>
-                  <div className="overflow-x-auto rounded-lg border border-line bg-surface">
+                  <div className="relative overflow-x-auto rounded-kontrol border border-line bg-surface">
                     <table className="w-full text-left text-xs">
                       <thead className="border-b border-line bg-subtle text-ink-subtle uppercase">
                         <tr>
                           {Object.keys(pratinjau.contoh[0]!).map((k) => (
                             <th key={k} scope="col" className="px-2.5 py-1.5 whitespace-nowrap">
-                              {k}
+                              {LABEL_KOLOM_PRATINJAU[k] ?? k}
                             </th>
                           ))}
                         </tr>
@@ -326,7 +395,7 @@ export function TabImporData() {
                 <p className="text-xs text-ink-muted">
                   {pratinjau.dapat_disimpan ? (
                     <span className="inline-flex items-center gap-1.5 text-hadir">
-                      <CheckCircle2 className="size-4 shrink-0" aria-hidden="true" />
+                      <CheckCircleIcon className="size-4 shrink-0" aria-hidden="true" />
                       Semua baris sah dan siap disimpan.
                     </span>
                   ) : (
@@ -355,14 +424,14 @@ export function TabImporData() {
         />
         <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-2.5 text-xs text-ink-muted">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0 text-tidak-hadir" aria-hidden="true" />
+            <WarningIcon className="mt-0.5 size-4 shrink-0 text-tidak-hadir" aria-hidden="true" />
             <p>
               Tindakan ini tidak dapat dibatalkan dan tercatat pada log aktivitas. Gunakan hanya
               setelah masa uji coba/pilot berakhir atau sebelum memasukkan data awal yang baru.
             </p>
           </div>
           <Button variant="danger" size="touch" onClick={() => setDialogHapusBuka(true)}>
-            <Trash2 aria-hidden="true" />
+            <TrashIcon aria-hidden="true" />
             Hapus data pilot
           </Button>
         </CardBody>
@@ -384,7 +453,7 @@ export function TabImporData() {
             if (konfirmasiCocok) mutasiHapusPilot.mutate(konfirmasiNama);
           }}
         >
-          <p className="rounded-lg bg-tidak-hadir-soft px-3 py-2 text-xs text-tidak-hadir">
+          <p className="rounded-kontrol bg-tidak-hadir-soft px-3 py-2 text-xs text-tidak-hadir">
             Untuk melanjutkan, ketik persis nama sekolah:{' '}
             <strong className="font-semibold">{namaSekolahResmi || '(belum diatur)'}</strong>
           </p>
@@ -430,18 +499,18 @@ function KotakRingkasan({
 }: {
   label: string;
   nilai: number;
-  nada?: 'netral' | 'hadir' | 'mendampingi' | 'tidak-hadir';
+  nada?: 'netral' | 'hadir' | 'info' | 'tidak-hadir';
 }) {
   const warna =
     nada === 'hadir'
       ? 'text-hadir'
-      : nada === 'mendampingi'
-        ? 'text-mendampingi'
+      : nada === 'info'
+        ? 'text-info'
         : nada === 'tidak-hadir'
           ? 'text-tidak-hadir'
           : 'text-ink';
   return (
-    <div className="rounded-lg border border-line bg-surface px-3 py-2">
+    <div className="rounded-kontrol border border-line bg-surface px-3 py-2">
       <p className="text-2xs font-semibold tracking-wider text-ink-subtle uppercase">{label}</p>
       <p className={cn('mt-0.5 text-lg font-bold tabular-nums', warna)}>{angka(nilai)}</p>
     </div>

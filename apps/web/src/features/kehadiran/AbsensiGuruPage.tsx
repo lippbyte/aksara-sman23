@@ -1,18 +1,19 @@
 import { STATUS_KEHADIRAN, type Kehadiran } from '@sms/shared';
-import { ClipboardCheck, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ClipboardTextIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
+import { DataTable, Pagination, type GrupMobile, type Kolom } from '@/components/DataTable';
 import { FilterBar, FilterItem, useFilterUrl } from '@/components/FilterBar';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { Input, Select } from '@/components/ui/input';
 import { pesanGalat } from '@/lib/api';
 import { usePengguna } from '@/lib/auth';
-import { hariIni, tanggalPanjang } from '@/lib/format';
+import { hariIni, tanggalPanjang, tanggalPendek } from '@/lib/format';
 import { useRefGuru, useRefKelas } from '@/lib/referensi';
 import { useDaftarKehadiran, useHapusKehadiran } from './api';
 import { FormKehadiran } from './FormKehadiran';
+import { KartuKehadiran } from './KartuKehadiran';
 import {
   kolomGuru,
   kolomJam,
@@ -26,6 +27,11 @@ import {
 } from './kolom';
 
 const KUNCI_FILTER = ['tanggal', 'kelas_id', 'guru_id', 'status'] as const;
+
+/** `Hari ini · Selasa, 24 Nov 2026` atau `Senin, 23 Nov 2026`. */
+function judulTanggal(tanggal: string) {
+  return tanggal === hariIni() ? `Hari ini · ${tanggalPanjang(tanggal)}` : tanggalPanjang(tanggal);
+}
 
 export function AbsensiGuruPage() {
   const user = usePengguna();
@@ -42,6 +48,36 @@ export function AbsensiGuruPage() {
   const [form, setForm] = useState<{ catatan: Kehadiran | null } | null>(null);
   const [hapus, setHapus] = useState<Kehadiran | null>(null);
 
+  const tombolAksi = useCallback(
+    (k: Kehadiran) => {
+      // Tanggal ikut disebut: di ponsel tanggal hanya ada di judul kelompok, bukan di kartu.
+      const siapa = `${k.nama_guru}, ${tanggalPendek(k.tanggal)}, jam ke-${rentangJam(k)}`;
+      return (
+        <span className="inline-flex gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={`Ubah catatan ${siapa}`}
+            onClick={() => setForm({ catatan: k })}
+          >
+            <PencilSimpleIcon aria-hidden="true" />
+          </Button>
+          {bolehHapus && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Hapus catatan ${siapa}`}
+              onClick={() => setHapus(k)}
+            >
+              <TrashIcon aria-hidden="true" />
+            </Button>
+          )}
+        </span>
+      );
+    },
+    [bolehHapus],
+  );
+
   const kolom = useMemo<Kolom<Kehadiran>[]>(
     () => [
       kolomTanggal,
@@ -52,40 +88,21 @@ export function AbsensiGuruPage() {
       kolomStatus,
       kolomTugas,
       kolomKeterangan,
-      {
-        id: 'aksi',
-        judul: 'Aksi',
-        aksi: true,
-        sel: (k) => (
-          <span className="inline-flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Ubah catatan ${k.nama_guru} jam ke-${rentangJam(k)}`}
-              onClick={() => setForm({ catatan: k })}
-            >
-              <Pencil aria-hidden="true" />
-            </Button>
-            {bolehHapus && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Hapus catatan ${k.nama_guru} jam ke-${rentangJam(k)}`}
-                onClick={() => setHapus(k)}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            )}
-          </span>
-        ),
-      },
+      { id: 'aksi', judul: 'Aksi', aksi: true, sel: tombolAksi },
     ],
-    [sekretaris, bolehHapus],
+    [sekretaris, tombolAksi],
+  );
+
+  // Daftar dari API sudah terurut tanggal (terbaru dulu) lalu jam, jadi kartu ponsel bisa
+  // dikelompokkan per tanggal tanpa mengulang tanggal di setiap kartu (audit Fase 2 G1).
+  const grupTanggal = useMemo<GrupMobile<Kehadiran>>(
+    () => ({ kunci: (k) => k.tanggal, judul: judulTanggal }),
+    [],
   );
 
   const tombolCatat = (
     <Button size="touch" onClick={() => setForm({ catatan: null })}>
-      <Plus aria-hidden="true" />
+      <PlusIcon aria-hidden="true" />
       Catat kehadiran
     </Button>
   );
@@ -179,8 +196,10 @@ export function AbsensiGuruPage() {
         galat={daftar.isError ? pesanGalat(daftar.error) : null}
         onCobaLagi={() => void daftar.refetch()}
         keterangan="Daftar kehadiran guru"
+        kartuMobile={(k) => <KartuKehadiran k={k} tampilKelas={!sekretaris} aksi={tombolAksi(k)} />}
+        grupMobile={grupTanggal}
         kosong={{
-          icon: ClipboardCheck,
+          icon: ClipboardTextIcon,
           pesan: f.adaFilter
             ? 'Tidak ada catatan yang cocok dengan filter.'
             : 'Belum ada catatan kehadiran.',

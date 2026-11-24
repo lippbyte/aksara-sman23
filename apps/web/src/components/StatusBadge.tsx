@@ -1,6 +1,11 @@
 import { cn } from '@/lib/utils';
 
-export type NadaStatus = 'hadir' | 'mendampingi' | 'tidak-hadir' | 'izin' | 'sakit' | 'netral';
+/**
+ * Nada visual. Status data (hadir…sakit) dipakai hanya untuk statusnya sendiri; `info` dan
+ * `peringatan` untuk tingkat/umpan balik. Violet `mendampingi` khusus status Mendampingi.
+ */
+export type NadaStatus =
+  'hadir' | 'mendampingi' | 'tidak-hadir' | 'izin' | 'sakit' | 'info' | 'peringatan' | 'netral';
 
 const KELAS_NADA: Record<NadaStatus, { lencana: string; titik: string }> = {
   hadir: { lencana: 'bg-hadir-soft text-hadir', titik: 'bg-hadir-chart' },
@@ -8,6 +13,8 @@ const KELAS_NADA: Record<NadaStatus, { lencana: string; titik: string }> = {
   'tidak-hadir': { lencana: 'bg-tidak-hadir-soft text-tidak-hadir', titik: 'bg-tidak-hadir-chart' },
   izin: { lencana: 'bg-izin-soft text-izin', titik: 'bg-izin-chart' },
   sakit: { lencana: 'bg-sakit-soft text-sakit', titik: 'bg-sakit-chart' },
+  info: { lencana: 'bg-info-soft text-info', titik: 'bg-accent' },
+  peringatan: { lencana: 'bg-peringatan-soft text-peringatan', titik: 'bg-peringatan-garis' },
   netral: { lencana: 'bg-netral-soft text-netral', titik: 'bg-icon-muted' },
 };
 
@@ -25,18 +32,17 @@ const NADA: Record<string, NadaStatus> = {
   // Tugas
   Ada: 'netral',
   'Tidak Ada': 'tidak-hadir',
-  // Status data master
+  // Status data master dan akun
   aktif: 'hadir',
   tidak_aktif: 'netral',
-  Aktif: 'mendampingi',
-  Nonaktif: 'netral',
-  // Predikat kinerja dan MGMP
+  // Predikat kinerja dan MGMP (tingkat, bukan status kehadiran)
   'Sangat Baik': 'hadir',
-  Baik: 'mendampingi',
-  Cukup: 'izin',
+  Baik: 'info',
+  Cukup: 'peringatan',
   Kurang: 'tidak-hadir',
   'Sangat Aktif': 'hadir',
-  'Cukup Aktif': 'izin',
+  Aktif: 'info',
+  'Cukup Aktif': 'peringatan',
   'Kurang Aktif': 'tidak-hadir',
 };
 
@@ -67,7 +73,7 @@ export function StatusBadge({ status, label, nada, className }: StatusBadgeProps
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-2xs font-semibold whitespace-nowrap',
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-2xs font-semibold whitespace-nowrap ring-1 ring-current/15 ring-inset',
         k.lencana,
         className,
       )}

@@ -12,12 +12,13 @@ import {
   type KehadiranFormValues,
   type KehadiranInput,
 } from '@sms/shared';
-import { Check, CircleAlert } from 'lucide-react';
+import { CheckIcon, WarningCircleIcon } from '@phosphor-icons/react';
+import { useEffect } from 'react';
 import { Controller, useForm, type Path } from 'react-hook-form';
 import { toast } from 'sonner';
 import { SegmentedStatus } from '@/components/SegmentedStatus';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogAksi } from '@/components/ui/dialog';
+import { Dialog, DialogAksi, DialogBatal } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { ApiError, pesanGalat } from '@/lib/api';
@@ -31,7 +32,13 @@ interface FormKehadiranProps {
   /** Catatan yang diubah; kosong berarti menambah. */
   catatan?: Kehadiran | null;
   /** Nilai awal saat menambah (mis. dari filter atau dashboard kelas). */
-  awal?: { kelas_id?: number | null; tanggal?: string };
+  awal?: {
+    kelas_id?: number | null;
+    tanggal?: string;
+    guru_id?: number | null;
+    jam_ke?: number;
+    lama_jam?: number;
+  };
   onTutup: () => void;
 }
 
@@ -72,20 +79,33 @@ export function FormKehadiran({ catatan, awal, onTutup }: FormKehadiranProps) {
         }
       : {
           tanggal: awal?.tanggal || hariIni(),
-          guru_id: '',
+          guru_id: awal?.guru_id ?? '',
           kelas_id: sekretaris ? user.kelas_id : (awal?.kelas_id ?? null),
-          jam_ke: 1,
-          lama_jam: 1,
+          jam_ke: awal?.jam_ke ?? 1,
+          lama_jam: awal?.lama_jam ?? 1,
           status_kehadiran: 'Hadir',
           status_tugas: 'Ada',
           keterangan: '',
         },
   });
   const galat = form.formState.errors;
+
+  // <select> tak terkendali menampilkan "Pilih…" bila nilai awalnya (mis. guru dari slot jadwal di
+  // dashboard) ditetapkan sebelum pilihannya selesai dimuat, padahal nilai form-nya sudah benar.
+  // Setelah pilihan tersedia, terapkan ulang nilai yang sama ke elemen (tidak menandai "kotor").
+  useEffect(() => {
+    if (guru.data) form.setValue('guru_id', form.getValues('guru_id'));
+  }, [guru.data, form]);
+  useEffect(() => {
+    if (kelas.data && !sekretaris) form.setValue('kelas_id', form.getValues('kelas_id'));
+  }, [kelas.data, sekretaris, form]);
+
   const tanggal = form.watch('tanggal');
   const kelasId = form.watch('kelas_id');
   const guruId = Number(form.watch('guru_id')) || null;
   const jamKe = form.watch('jam_ke');
+  const statusKehadiran = form.watch('status_kehadiran');
+  const statusTugas = form.watch('status_tugas');
 
   const kelasDipilih = typeof kelasId === 'number' ? kelasId : null;
   const jadwal = useJadwalHari(
@@ -115,14 +135,16 @@ export function FormKehadiran({ catatan, awal, onTutup }: FormKehadiranProps) {
       open
       onOpenChange={(buka) => !buka && onTutup()}
       judul={catatan ? 'Ubah catatan kehadiran' : 'Catat kehadiran guru'}
+      // Tutup tanpa sengaja (ketuk latar, Esc, geser) tidak membuang isian (audit M3).
+      kotor={form.formState.isDirty && !simpan.isSuccess}
     >
       <form noValidate onSubmit={kirim} className="flex flex-col gap-4">
         {simpan.isError && (
           <p
             role="alert"
-            className="flex items-start gap-2 rounded-lg bg-tidak-hadir-soft px-3 py-2 text-sm text-tidak-hadir"
+            className="flex items-start gap-2 rounded-kontrol bg-tidak-hadir-soft px-3 py-2 text-sm text-tidak-hadir"
           >
-            <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <WarningCircleIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             {pesanGalat(simpan.error)}
           </p>
         )}
@@ -131,7 +153,7 @@ export function FormKehadiran({ catatan, awal, onTutup }: FormKehadiranProps) {
           {sekretaris ? (
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-ink">Kelas</span>
-              <span className="flex h-11 items-center rounded-lg bg-subtle px-3 text-sm text-ink sm:h-9">
+              <span className="flex h-11 items-center rounded-kontrol bg-subtle px-3 text-sm text-ink pointer-fine:h-9">
                 {user.nama_kelas}
               </span>
             </div>
@@ -159,9 +181,7 @@ export function FormKehadiran({ catatan, awal, onTutup }: FormKehadiranProps) {
 
         {jadwal.data && jadwal.data.length > 0 && (
           <div>
-            <p className="text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
-              Isi dari jadwal hari ini
-            </p>
+            <p className="text-xs font-medium text-ink-muted">Isi cepat dari jadwal hari ini</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {jadwal.data.map((j) => {
                 const aktif = guruId === j.guru_id && jamKe === j.jam_ke;
@@ -172,19 +192,22 @@ export function FormKehadiran({ catatan, awal, onTutup }: FormKehadiranProps) {
                     type="button"
                     aria-pressed={aktif}
                     onClick={() => {
-                      form.setValue('guru_id', j.guru_id, { shouldValidate: true });
-                      form.setValue('jam_ke', j.jam_ke);
-                      form.setValue('lama_jam', j.total_jam_mengajar);
+                      form.setValue('guru_id', j.guru_id, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                      form.setValue('jam_ke', j.jam_ke, { shouldDirty: true });
+                      form.setValue('lama_jam', j.total_jam_mengajar, { shouldDirty: true });
                     }}
                     className={cn(
-                      'flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-left text-xs transition-colors duration-200',
+                      'tombol-tekan flex min-h-11 items-center gap-1.5 rounded-kontrol border px-2.5 py-1 text-left text-xs transition-colors duration-200',
                       aktif
-                        ? 'border-accent bg-accent-soft text-accent'
-                        : 'border-line bg-surface text-ink-muted hover:bg-app',
+                        ? 'border-accent bg-accent-soft font-semibold text-accent'
+                        : 'border-line-kontrol bg-surface text-ink-muted hover:border-accent hover:text-ink',
                     )}
                   >
                     {j.sudah_dicatat && (
-                      <Check className="size-3.5 shrink-0 text-hadir" aria-hidden="true" />
+                      <CheckIcon className="size-3.5 shrink-0 text-hadir" aria-hidden="true" />
                     )}
                     <span>
                       <span className="font-semibold tabular-nums">
@@ -221,61 +244,74 @@ export function FormKehadiran({ catatan, awal, onTutup }: FormKehadiranProps) {
               ))}
             </Select>
           </Field>
+          {/* Grup pilihan dinamai label Field lewat aria-labelledby (audit M1). */}
           <Field label="Lama" wajib galat={galat.lama_jam?.message}>
-            <Controller
-              control={form.control}
-              name="lama_jam"
-              render={({ field }) => (
-                <SegmentedStatus
-                  label="Lama jam pelajaran"
-                  opsi={OPSI_LAMA}
-                  nilai={typeof field.value === 'number' ? field.value : null}
-                  onUbah={field.onChange}
-                />
-              )}
-            />
+            {(atribut) => (
+              <Controller
+                control={form.control}
+                name="lama_jam"
+                render={({ field }) => (
+                  <SegmentedStatus
+                    {...atribut}
+                    label="Lama jam pelajaran"
+                    opsi={OPSI_LAMA}
+                    nilai={typeof field.value === 'number' ? field.value : null}
+                    onUbah={field.onChange}
+                  />
+                )}
+              />
+            )}
           </Field>
         </div>
 
         <Field label="Status kehadiran" wajib galat={galat.status_kehadiran?.message}>
-          <Controller
-            control={form.control}
-            name="status_kehadiran"
-            render={({ field }) => (
-              <SegmentedStatus
-                label="Status kehadiran"
-                opsi={OPSI_STATUS}
-                nilai={field.value ?? null}
-                onUbah={field.onChange}
-              />
-            )}
-          />
+          {(atribut) => (
+            <Controller
+              control={form.control}
+              name="status_kehadiran"
+              render={({ field }) => (
+                <SegmentedStatus
+                  {...atribut}
+                  label="Status kehadiran"
+                  opsi={OPSI_STATUS}
+                  nilai={field.value ?? null}
+                  onUbah={field.onChange}
+                />
+              )}
+            />
+          )}
         </Field>
 
-        <Field label="Tugas" wajib galat={galat.status_tugas?.message}>
-          <Controller
-            control={form.control}
-            name="status_tugas"
-            render={({ field }) => (
-              <SegmentedStatus
-                label="Status tugas"
-                opsi={OPSI_TUGAS}
-                nilai={field.value ?? null}
-                onUbah={field.onChange}
+        {/* Tugas relevan terutama bila guru tidak hadir (PROJECT-CONTEXT §6.1, audit M11/G4).
+            Untuk Hadir dengan nilai bawaan "Ada" isian disembunyikan; nilainya tetap tersimpan
+            "Ada" seperti sebelumnya. Bila nilainya bukan bawaan, isian selalu tampil. */}
+        {(statusKehadiran !== 'Hadir' || statusTugas !== 'Ada') && (
+          <Field label="Tugas" wajib galat={galat.status_tugas?.message}>
+            {(atribut) => (
+              <Controller
+                control={form.control}
+                name="status_tugas"
+                render={({ field }) => (
+                  <SegmentedStatus
+                    {...atribut}
+                    label="Status tugas"
+                    opsi={OPSI_TUGAS}
+                    nilai={field.value ?? null}
+                    onUbah={field.onChange}
+                  />
+                )}
               />
             )}
-          />
-        </Field>
+          </Field>
+        )}
 
         <Field label="Keterangan" galat={galat.keterangan?.message}>
           <Textarea rows={2} maxLength={500} {...form.register('keterangan')} />
         </Field>
 
         <DialogAksi>
-          <Button variant="secondary" size="touch" onClick={onTutup}>
-            Batal
-          </Button>
-          <Button type="submit" size="touch" loading={simpan.isPending}>
+          <DialogBatal />
+          <Button type="submit" loading={simpan.isPending}>
             {catatan ? 'Simpan perubahan' : 'Catat kehadiran'}
           </Button>
         </DialogAksi>

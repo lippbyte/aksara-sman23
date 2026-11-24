@@ -8,7 +8,13 @@ import {
   type SekolahInput,
 } from '@sms/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image, ImageUp, School, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  ChalkboardIcon,
+  ImageIcon,
+  ImageSquareIcon,
+  TrashIcon,
+  WarningIcon,
+} from '@phosphor-icons/react';
 import { useRef } from 'react';
 import { useForm, type Path } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -55,7 +61,7 @@ export function TabSekolah() {
   if (sekolah.isError) {
     return (
       <EmptyState
-        icon={TriangleAlert}
+        icon={WarningIcon}
         pesan={pesanGalat(sekolah.error)}
         aksi={
           <Button variant="secondary" onClick={() => void sekolah.refetch()}>
@@ -198,17 +204,20 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
         />
         <CardBody className="grid gap-4 md:grid-cols-3">
           {/* Slot 1: Logo sekolah */}
-          <div className="flex flex-col justify-between gap-3 rounded-lg border border-line-soft bg-app/50 p-3">
+          <div className="flex flex-col justify-between gap-3 rounded-kontrol border border-line-soft bg-app/50 p-3">
             <div className="flex items-center gap-3">
               {sekolah.logo_url ? (
                 <img
                   src={sekolah.logo_url}
                   alt="Logo sekolah saat ini"
-                  className="size-14 shrink-0 rounded-lg border border-line bg-surface object-contain p-1"
+                  width={56}
+                  height={56}
+                  decoding="async"
+                  className="size-14 shrink-0 rounded-kontrol border border-line bg-surface object-contain p-1"
                 />
               ) : (
-                <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-subtle">
-                  <School className="size-6 text-icon-muted" aria-hidden="true" />
+                <span className="flex size-14 shrink-0 items-center justify-center rounded-kontrol bg-subtle">
+                  <ChalkboardIcon className="size-6 text-icon-muted" aria-hidden="true" />
                 </span>
               )}
               <div className="min-w-0">
@@ -235,7 +244,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                 loading={unggahLogo.isPending}
                 onClick={() => inputLogo.current?.click()}
               >
-                <ImageUp aria-hidden="true" />
+                <ImageSquareIcon aria-hidden="true" />
                 Unggah logo
               </Button>
               {sekolah.logo_url && (
@@ -245,7 +254,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                   loading={hapusLogo.isPending}
                   onClick={() => hapusLogo.mutate()}
                 >
-                  <Trash2 aria-hidden="true" />
+                  <TrashIcon aria-hidden="true" />
                   Hapus
                 </Button>
               )}
@@ -253,17 +262,18 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
           </div>
 
           {/* Slot 2: Latar halaman masuk */}
-          <div className="flex flex-col justify-between gap-3 rounded-lg border border-line-soft bg-app/50 p-3">
+          <div className="flex flex-col justify-between gap-3 rounded-kontrol border border-line-soft bg-app/50 p-3">
             <div>
-              <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-line bg-subtle">
+              <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded-kontrol border border-line bg-subtle">
                 {sekolah.login_background_url ? (
                   <img
                     src={`${sekolah.login_background_url}&w=640&fmt=webp`}
                     alt="Pratinjau latar halaman masuk"
+                    decoding="async"
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <Image className="size-6 text-icon-muted" aria-hidden="true" />
+                  <ImageIcon className="size-6 text-icon-muted" aria-hidden="true" />
                 )}
               </div>
               <p className="text-sm font-medium text-ink">Latar halaman masuk</p>
@@ -292,7 +302,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                 loading={unggahLatar.isPending && unggahLatar.variables?.jenis === 'masuk'}
                 onClick={() => inputLatarMasuk.current?.click()}
               >
-                <ImageUp aria-hidden="true" />
+                <ImageSquareIcon aria-hidden="true" />
                 {sekolah.login_background_url ? 'Ganti' : 'Unggah'}
               </Button>
               {sekolah.login_background_url && (
@@ -302,7 +312,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                   loading={hapusLatar.isPending && hapusLatar.variables === 'masuk'}
                   onClick={() => hapusLatar.mutate('masuk')}
                 >
-                  <Trash2 aria-hidden="true" />
+                  <TrashIcon aria-hidden="true" />
                   Hapus
                 </Button>
               )}
@@ -310,17 +320,18 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
           </div>
 
           {/* Slot 3: Latar dashboard */}
-          <div className="flex flex-col justify-between gap-3 rounded-lg border border-line-soft bg-app/50 p-3">
+          <div className="flex flex-col justify-between gap-3 rounded-kontrol border border-line-soft bg-app/50 p-3">
             <div>
-              <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-line bg-subtle">
+              <div className="mb-2 flex h-20 w-full items-center justify-center overflow-hidden rounded-kontrol border border-line bg-subtle">
                 {sekolah.dashboard_background_url ? (
                   <img
                     src={`${sekolah.dashboard_background_url}&w=640&fmt=webp`}
                     alt="Pratinjau latar dashboard"
+                    decoding="async"
                     className="h-full w-full object-cover grayscale"
                   />
                 ) : (
-                  <Image className="size-6 text-icon-muted" aria-hidden="true" />
+                  <ImageIcon className="size-6 text-icon-muted" aria-hidden="true" />
                 )}
               </div>
               <p className="text-sm font-medium text-ink">Latar dashboard</p>
@@ -349,7 +360,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                 loading={unggahLatar.isPending && unggahLatar.variables?.jenis === 'dashboard'}
                 onClick={() => inputLatarDashboard.current?.click()}
               >
-                <ImageUp aria-hidden="true" />
+                <ImageSquareIcon aria-hidden="true" />
                 {sekolah.dashboard_background_url ? 'Ganti' : 'Unggah'}
               </Button>
               {sekolah.dashboard_background_url && (
@@ -359,7 +370,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                   loading={hapusLatar.isPending && hapusLatar.variables === 'dashboard'}
                   onClick={() => hapusLatar.mutate('dashboard')}
                 >
-                  <Trash2 aria-hidden="true" />
+                  <TrashIcon aria-hidden="true" />
                   Hapus
                 </Button>
               )}
@@ -415,7 +426,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
                 {Object.entries(NAMA_HARI).map(([nomor, nama]) => (
                   <label
                     key={nomor}
-                    className="flex min-h-11 items-center gap-2 text-sm sm:min-h-9"
+                    className="flex min-h-11 items-center gap-2 text-sm pointer-fine:min-h-9"
                   >
                     <Checkbox
                       checked={hariEfektif.includes(Number(nomor))}
@@ -444,29 +455,27 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
           />
           <CardBody className="grid gap-5">
             <fieldset>
-              <legend className="mb-2 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
+              <legend className="mb-2 text-sm font-semibold text-ink">
                 Kinerja guru, bila skor manajemen terisi
               </legend>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-3">
                 {bobot('bobot_kinerja_kehadiran', 'Kehadiran')}
                 {bobot('bobot_kinerja_administrasi', 'Administrasi')}
                 {bobot('bobot_kinerja_manajemen', 'Manajemen')}
               </div>
             </fieldset>
             <fieldset>
-              <legend className="mb-2 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
+              <legend className="mb-2 text-sm font-semibold text-ink">
                 Kinerja guru, bila skor manajemen kosong
               </legend>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-3 gap-3">
                 {bobot('bobot_kinerja_kehadiran_tanpa_manajemen', 'Kehadiran')}
                 {bobot('bobot_kinerja_administrasi_tanpa_manajemen', 'Administrasi')}
               </div>
             </fieldset>
             <fieldset>
-              <legend className="mb-2 text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
-                MGMP
-              </legend>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <legend className="mb-2 text-sm font-semibold text-ink">MGMP</legend>
+              <div className="grid grid-cols-3 gap-3">
                 {bobot('bobot_mgmp_kehadiran', 'Kehadiran')}
                 {bobot('bobot_mgmp_siswa', 'Siswa')}
                 {bobot('bobot_mgmp_administrasi', 'Administrasi')}
@@ -475,7 +484,7 @@ function FormSekolah({ sekolah }: { sekolah: Sekolah }) {
           </CardBody>
         </Card>
 
-        <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface/95 px-4 py-3 backdrop-blur-sm lg:static lg:border-0 lg:bg-transparent lg:p-0">
+        <div className="bar-simpan-lekat sticky bottom-(--tinggi-bar-bawah) z-20 flex flex-wrap items-center justify-between gap-3 rounded-kartu border border-line bg-surface px-4 py-3 lg:static lg:border-0 lg:bg-transparent lg:p-0">
           <p className="text-xs text-ink-subtle">
             Setelah mengubah tanggal awal pekan atau hari efektif, sinkronkan ulang rekap kehadiran.
           </p>

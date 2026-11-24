@@ -1,29 +1,47 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { Halaman } from '@sms/shared';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useForm, type FieldValues } from 'react-hook-form';
+import { PencilSimpleIcon, PlusIcon, TrashIcon } from '@phosphor-icons/react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Controller, useForm, type FieldValues } from 'react-hook-form';
 import { toast } from 'sonner';
 import type { z } from 'zod';
-import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
+import {
+  DataTable,
+  kelompokkanBerurutan,
+  Pagination,
+  type GrupMobile,
+  type Kolom,
+} from '@/components/DataTable';
 import { FilterBar, FilterItem, useFilterUrl } from '@/components/FilterBar';
+import { KartuRingkas, type Ringkasan } from '@/components/KartuRingkas';
+import { SegmentedStatus } from '@/components/SegmentedStatus';
+import type { NadaStatus } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog, Dialog, DialogAksi } from '@/components/ui/dialog';
+import { ConfirmDialog, Dialog, DialogAksi, DialogBatal } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
 import { api, ApiError, pesanGalat, qs } from '@/lib/api';
+import { angka } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export interface Opsi {
   nilai: string | number;
   label: string;
+  /** Untuk `segmen`: warna pilihan terpilih (bawaan netral). */
+  nada?: NadaStatus;
 }
 
 export interface Isian {
   nama: string;
   label: string;
-  jenis: 'teks' | 'email' | 'sandi' | 'angka' | 'pilih' | 'centang' | 'textarea';
+  /** `segmen`: pilihan bersebelahan (SegmentedStatus) untuk 2–4 opsi pendek. */
+  jenis: 'teks' | 'email' | 'sandi' | 'angka' | 'pilih' | 'segmen' | 'centang' | 'textarea';
   opsi?: Opsi[];
+  /** Judul kelompok (fieldset). Isian berurutan dengan grup sama dikelompokkan. */
+  grup?: string;
+  /** Isian pendek: setengah lebar mulai 640 px (mis. Kode, NIP, Jenis kelamin). */
+  setengah?: boolean;
   /** Untuk `pilih`: nilai dikirim sebagai angka (ID); pilihan kosong menjadi null. */
   nilaiAngka?: boolean;
   /** Label pilihan kosong, mis. "Tanpa MGMP". Tanpa ini pilihan kosong berbunyi "Pilih…". */
@@ -59,6 +77,10 @@ interface TabSumberProps<T extends { id: number }> {
   cari?: string;
   filter?: FilterDef[];
   aksiTambahan?: (baris: T) => ReactNode;
+  /** Isi kartu ringkas di ponsel (audit Fase 4): judul, baris kedua, detail, lencana. */
+  ringkas?: (baris: T) => Ringkasan;
+  /** Kelompokkan kartu ponsel dengan judul lekat (mis. jadwal per hari). */
+  grupMobile?: GrupMobile<T>;
 }
 
 /** Kotak cari dengan jeda, supaya tidak meminta data pada setiap ketukan. */
@@ -104,6 +126,8 @@ export function TabSumber<T extends { id: number }>({
   cari,
   filter = [],
   aksiTambahan,
+  ringkas,
+  grupMobile,
 }: TabSumberProps<T>) {
   const kunciFilter = useMemo(() => ['q', ...filter.map((f) => f.kunci)], [filter]);
   const f = useFilterUrl(kunciFilter);
@@ -135,42 +159,40 @@ export function TabSumber<T extends { id: number }>({
     onError: (err) => toast.error(pesanGalat(err)),
   });
 
-  const kolomLengkap = useMemo<Kolom<T>[]>(
-    () => [
-      ...kolom,
-      {
-        id: 'aksi',
-        judul: 'Aksi',
-        aksi: true,
-        sel: (baris) => (
-          <span className="inline-flex flex-wrap justify-end gap-1">
-            {aksiTambahan?.(baris)}
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Ubah ${labelBaris(baris)}`}
-              onClick={() => setForm({ mode: 'ubah', baris })}
-            >
-              <Pencil aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Hapus ${labelBaris(baris)}`}
-              onClick={() => setHapus(baris)}
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </span>
-        ),
-      },
-    ],
-    [kolom, aksiTambahan, labelBaris],
+  const tombolAksi = useCallback(
+    (baris: T) => (
+      <span className="inline-flex flex-wrap justify-end gap-1">
+        {aksiTambahan?.(baris)}
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Ubah ${labelBaris(baris)}`}
+          onClick={() => setForm({ mode: 'ubah', baris })}
+        >
+          <PencilSimpleIcon aria-hidden="true" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={`Hapus ${labelBaris(baris)}`}
+          onClick={() => setHapus(baris)}
+        >
+          <TrashIcon aria-hidden="true" />
+        </Button>
+      </span>
+    ),
+    [aksiTambahan, labelBaris],
   );
+
+  const kolomLengkap = useMemo<Kolom<T>[]>(
+    () => [...kolom, { id: 'aksi', judul: 'Aksi', aksi: true, sel: tombolAksi }],
+    [kolom, tombolAksi],
+  );
+  const total = daftar.data?.meta.total;
 
   const tombolTambah = (
     <Button size="touch" onClick={() => setForm({ mode: 'buat' })}>
-      <Plus aria-hidden="true" />
+      <PlusIcon aria-hidden="true" />
       Tambah {nama}
     </Button>
   );
@@ -216,6 +238,12 @@ export function TabSumber<T extends { id: number }>({
         ))}
       </FilterBar>
 
+      {/* Jumlah data langsung di atas daftar (audit M10), bukan hanya di paginasi bawah. */}
+      {total !== undefined && total > 0 && (
+        <p className="mb-2 text-xs text-ink-muted tabular-nums" aria-live="polite">
+          {`${angka(total)} ${nama}${f.adaFilter ? ' cocok dengan filter' : ''}`}
+        </p>
+      )}
       <DataTable
         kolom={kolomLengkap}
         data={daftar.data?.data}
@@ -224,6 +252,10 @@ export function TabSumber<T extends { id: number }>({
         galat={daftar.isError ? pesanGalat(daftar.error) : null}
         onCobaLagi={() => void daftar.refetch()}
         keterangan={`Daftar ${nama}`}
+        kartuMobile={
+          ringkas ? (b) => <KartuRingkas {...ringkas(b)} aksi={tombolAksi(b)} /> : undefined
+        }
+        grupMobile={grupMobile}
         kosong={{
           pesan: f.adaFilter
             ? `Tidak ada ${nama} yang cocok dengan filter.`
@@ -327,6 +359,98 @@ function FormSumber({
   const tampil = isian.filter(
     (i) => !(i.hanyaBuat && id !== null) && (i.tampil ? i.tampil(isi) : true),
   );
+  // Kelompok kosong (semua isiannya tersembunyi) otomatis hilang karena dibentuk dari `tampil`.
+  const kelompok = kelompokkanBerurutan(tampil, (i) => i.grup ?? '');
+
+  function renderIsian(i: Isian) {
+    const galat = form.formState.errors[i.nama]?.message;
+    const pesan = typeof galat === 'string' ? galat : undefined;
+    // Isian pendek setengah lebar mulai 640 px; selain itu selebar form.
+    const lebar = i.setengah ? undefined : 'sm:col-span-2';
+
+    if (i.jenis === 'centang') {
+      return (
+        <label
+          key={i.nama}
+          className={cn(
+            'flex min-h-11 items-center gap-2.5 text-sm text-ink pointer-fine:min-h-9',
+            lebar,
+          )}
+        >
+          <Checkbox {...form.register(i.nama)} />
+          {i.label}
+        </label>
+      );
+    }
+
+    if (i.jenis === 'segmen') {
+      return (
+        <div key={i.nama} className={lebar}>
+          <Field label={i.label} wajib={i.wajib} bantuan={i.bantuan} galat={pesan}>
+            {(atribut) => (
+              <Controller
+                control={form.control}
+                name={i.nama}
+                render={({ field }) => (
+                  <SegmentedStatus
+                    {...atribut}
+                    label={i.label}
+                    opsi={(i.opsi ?? []).map((o) => ({
+                      nilai: o.nilai,
+                      label: o.label,
+                      nada: o.nada ?? 'netral',
+                    }))}
+                    nilai={(field.value as string | number | null | undefined) ?? null}
+                    onUbah={field.onChange}
+                  />
+                )}
+              />
+            )}
+          </Field>
+        </div>
+      );
+    }
+
+    return (
+      <div key={i.nama} className={lebar}>
+        <Field label={i.label} wajib={i.wajib} bantuan={i.bantuan} galat={pesan}>
+          {i.jenis === 'pilih' ? (
+            <Select
+              {...form.register(i.nama, {
+                setValueAs: i.nilaiAngka
+                  ? (v: unknown) => (v === '' || v === null || v === undefined ? null : Number(v))
+                  : undefined,
+              })}
+            >
+              <option value="">{i.labelKosong ?? 'Pilih…'}</option>
+              {i.opsi?.map((o) => (
+                <option key={o.nilai} value={o.nilai}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
+          ) : i.jenis === 'textarea' ? (
+            <Textarea {...form.register(i.nama)} />
+          ) : i.jenis === 'angka' ? (
+            <Input
+              type="number"
+              inputMode="numeric"
+              {...form.register(i.nama, { valueAsNumber: true })}
+            />
+          ) : (
+            <Input
+              type={i.jenis === 'sandi' ? 'password' : i.jenis === 'email' ? 'email' : 'text'}
+              autoComplete={i.jenis === 'sandi' ? 'new-password' : 'off'}
+              {...(i.jenis === 'email'
+                ? { autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }
+                : {})}
+              {...form.register(i.nama)}
+            />
+          )}
+        </Field>
+      </div>
+    );
+  }
 
   return (
     <Dialog
@@ -334,70 +458,36 @@ function FormSumber({
       layarPenuhMobile
       onOpenChange={(buka) => !buka && onTutup()}
       judul={id === null ? `Tambah ${nama}` : `Ubah ${nama}`}
+      kotor={form.formState.isDirty && !simpan.isSuccess}
     >
       <form
         noValidate
         onSubmit={form.handleSubmit((data) => simpan.mutate(data))}
-        className="flex flex-col gap-4"
+        className="flex flex-col gap-5"
       >
-        {tampil.map((i) => {
-          const galat = form.formState.errors[i.nama]?.message;
-          const pesan = typeof galat === 'string' ? galat : undefined;
-
-          if (i.jenis === 'centang') {
-            return (
-              <label
-                key={i.nama}
-                className="flex min-h-11 items-center gap-2.5 text-sm text-ink sm:min-h-9"
-              >
-                <Checkbox {...form.register(i.nama)} />
-                {i.label}
-              </label>
-            );
-          }
-
-          return (
-            <Field key={i.nama} label={i.label} wajib={i.wajib} bantuan={i.bantuan} galat={pesan}>
-              {i.jenis === 'pilih' ? (
-                <Select
-                  {...form.register(i.nama, {
-                    setValueAs: i.nilaiAngka
-                      ? (v: unknown) =>
-                          v === '' || v === null || v === undefined ? null : Number(v)
-                      : undefined,
-                  })}
-                >
-                  <option value="">{i.labelKosong ?? 'Pilih…'}</option>
-                  {i.opsi?.map((o) => (
-                    <option key={o.nilai} value={o.nilai}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
-              ) : i.jenis === 'textarea' ? (
-                <Textarea {...form.register(i.nama)} />
-              ) : i.jenis === 'angka' ? (
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  {...form.register(i.nama, { valueAsNumber: true })}
-                />
-              ) : (
-                <Input
-                  type={i.jenis === 'sandi' ? 'password' : i.jenis === 'email' ? 'email' : 'text'}
-                  autoComplete={i.jenis === 'sandi' ? 'new-password' : 'off'}
-                  {...form.register(i.nama)}
-                />
-              )}
-            </Field>
-          );
-        })}
+        {kelompok.map((g, gi) =>
+          g.kunci ? (
+            // Kelompok bernama (fieldset + legend): form panjang lebih mudah dipindai dan
+            // pembaca layar mengumumkan konteks isian (audit Fase 4).
+            <fieldset
+              key={g.kunci}
+              className={cn('min-w-0', gi > 0 && 'border-t border-line-soft pt-4')}
+            >
+              <legend className="float-left mb-3 w-full text-sm font-semibold text-ink">
+                {g.kunci}
+              </legend>
+              <div className="clear-left grid gap-4 sm:grid-cols-2">{g.isi.map(renderIsian)}</div>
+            </fieldset>
+          ) : (
+            <div key={`kelompok-${gi}`} className="grid gap-4 sm:grid-cols-2">
+              {g.isi.map(renderIsian)}
+            </div>
+          ),
+        )}
         <DialogAksi>
-          <Button variant="secondary" size="touch" onClick={onTutup}>
-            Batal
-          </Button>
-          <Button type="submit" size="touch" loading={simpan.isPending}>
-            Simpan
+          <DialogBatal />
+          <Button type="submit" loading={simpan.isPending}>
+            {id === null ? `Tambah ${nama}` : 'Simpan perubahan'}
           </Button>
         </DialogAksi>
       </form>

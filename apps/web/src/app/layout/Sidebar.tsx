@@ -1,12 +1,12 @@
-import { LogOut } from 'lucide-react';
+import { SignOutIcon } from '@phosphor-icons/react';
 import { NavLink } from 'react-router';
 import { toast } from 'sonner';
+import { LogoSekolah } from '@/components/GambarSekolah';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import logoSman23 from '@/images/logo.png';
 import { useAuth, useKeluar } from '@/lib/auth';
-import { APP_NAME } from '@/lib/config';
+import { APP_BRAND, APP_NAME } from '@/lib/config';
 import { cn } from '@/lib/utils';
-import { menuUntuk } from '../nav';
+import { menuBergrupUntuk, type NavItem } from '../nav';
 
 interface SidebarContentProps {
   collapsed?: boolean;
@@ -16,76 +16,113 @@ interface SidebarContentProps {
 
 export function SidebarContent({ collapsed = false, onNavigate }: SidebarContentProps) {
   const { user, sekolah } = useAuth();
-  const menu = user ? menuUntuk(user.role) : [];
+  const grup = user ? menuBergrupUntuk(user.role) : [];
 
   return (
     <div className="flex h-full flex-col">
       <div
         className={cn(
-          'flex h-14 shrink-0 items-center gap-2.5 border-b border-line px-4',
+          'flex h-16 shrink-0 items-center gap-3 border-b border-line px-4',
           collapsed && 'justify-center px-0',
         )}
       >
-        <img
-          src={sekolah?.logo_url || logoSman23}
-          alt="Logo SMAN 23"
-          className="size-8 shrink-0 rounded-lg object-contain"
-        />
+        <LogoSekolah url={sekolah?.logo_url} namaSekolah={sekolah?.nama_sekolah} ukuran={36} />
         {!collapsed && (
           <div className="min-w-0">
-            <p className="truncate text-sm leading-tight font-semibold text-ink">{APP_NAME}</p>
-            {sekolah && (
-              <p className="truncate text-2xs font-semibold tracking-wider text-ink-subtle uppercase">
-                SMAN 23 Bandung
-              </p>
-            )}
+            <p
+              title={APP_NAME}
+              translate="no"
+              className="truncate text-sm leading-tight font-bold tracking-tight text-ink"
+            >
+              {APP_BRAND}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-ink-subtle">
+              {sekolah?.nama_sekolah || 'Sistem Sekolah'}
+            </p>
           </div>
         )}
       </div>
 
-      <nav aria-label="Menu utama" className="flex-1 overflow-y-auto p-3">
-        <ul className="flex flex-col gap-1">
-          {menu.map((item) => {
-            const link = (
-              <NavLink
-                to={item.path}
-                end={item.path === '/'}
-                onClick={onNavigate}
-                aria-label={collapsed ? item.label : undefined}
-                className={({ isActive }) =>
-                  cn(
-                    'flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-all duration-200',
-                    collapsed && 'justify-center px-0',
-                    isActive
-                      ? 'bg-primary text-on-primary shadow-md'
-                      : 'text-ink-muted hover:bg-app hover:text-ink',
-                  )
-                }
+      <nav aria-label="Menu utama" className="gulir-stabil flex-1 overflow-y-auto px-3 py-2">
+        {grup.map((g, i) => (
+          <div
+            key={g.grup}
+            className={cn('py-2', i > 0 && collapsed && 'border-t border-line-soft')}
+          >
+            {!collapsed && (
+              <p
+                id={`grup-menu-${g.grup}`}
+                className="mb-1 px-3 text-xs font-semibold text-ink-subtle"
               >
-                <item.icon className="size-[18px] shrink-0" aria-hidden="true" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </NavLink>
-            );
-            return (
-              <li key={item.path}>
-                {collapsed ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>{link}</TooltipTrigger>
-                    <TooltipContent side="right">{item.label}</TooltipContent>
-                  </Tooltip>
-                ) : (
-                  link
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                {g.label}
+              </p>
+            )}
+            <ul
+              aria-labelledby={collapsed ? undefined : `grup-menu-${g.grup}`}
+              aria-label={collapsed ? g.label : undefined}
+              className="flex flex-col gap-0.5"
+            >
+              {g.item.map((item) => (
+                <li key={item.path}>
+                  <TautanMenu item={item} collapsed={collapsed} onNavigate={onNavigate} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div className="shrink-0 border-t border-line p-3">
         <KeluarButton collapsed={collapsed} />
       </div>
     </div>
+  );
+}
+
+function TautanMenu({
+  item,
+  collapsed,
+  onNavigate,
+}: {
+  item: NavItem;
+  collapsed: boolean;
+  onNavigate?: () => void;
+}) {
+  const link = (
+    <NavLink
+      to={item.path}
+      end={item.path === '/'}
+      onClick={onNavigate}
+      aria-label={collapsed ? item.label : undefined}
+      className={({ isActive }) =>
+        cn(
+          'tombol-tekan relative flex h-10 items-center gap-3 rounded-kontrol px-3 text-sm transition-colors duration-150',
+          collapsed && 'justify-center px-0',
+          isActive
+            ? 'bg-accent-soft font-semibold text-accent ring-1 ring-accent/15 ring-inset'
+            : 'font-medium text-ink-muted hover:bg-subtle hover:text-ink',
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {/* Ikon aktif ber-weight `fill`: penanda bentuk, bukan hanya warna (AGENTS §13). */}
+          <item.icon
+            weight={isActive ? 'fill' : 'regular'}
+            className="size-5 shrink-0"
+            aria-hidden="true"
+          />
+          {!collapsed && <span className="truncate">{item.label}</span>}
+        </>
+      )}
+    </NavLink>
+  );
+  if (!collapsed) return link;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -100,11 +137,11 @@ function KeluarButton({ collapsed }: { collapsed: boolean }) {
       }
       aria-label={collapsed ? 'Keluar' : undefined}
       className={cn(
-        'flex h-10 w-full items-center gap-3 rounded-lg bg-app px-3 text-sm font-medium text-ink-muted transition-all duration-200 hover:bg-tidak-hadir-soft hover:text-tidak-hadir disabled:opacity-60',
+        'tombol-tekan flex h-10 w-full items-center gap-3 rounded-kontrol bg-subtle/80 px-3 text-sm font-medium text-ink-muted hover:bg-tidak-hadir-soft hover:text-tidak-hadir disabled:opacity-60',
         collapsed && 'justify-center px-0',
       )}
     >
-      <LogOut className="size-[18px] shrink-0" aria-hidden="true" />
+      <SignOutIcon className="size-5 shrink-0" aria-hidden="true" />
       {!collapsed && <span>Keluar</span>}
     </button>
   );

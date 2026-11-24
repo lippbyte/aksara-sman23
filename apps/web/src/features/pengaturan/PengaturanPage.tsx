@@ -1,5 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  JAM_KE_MAX,
+  JAM_KE_MIN,
+  LAMA_JAM_MAX,
+  LAMA_JAM_MIN,
   akunBuatSchema,
   akunUbahSchema,
   guruSchema,
@@ -20,18 +24,18 @@ import {
   type Siswa,
 } from '@sms/shared';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, ChevronRight, KeyRound } from 'lucide-react';
+import { ArrowLeftIcon, CaretRightIcon, KeyIcon } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import { useForm, type FieldValues } from 'react-hook-form';
 import { Link, Navigate, NavLink, useParams } from 'react-router';
 import { toast } from 'sonner';
 import type { z } from 'zod';
-import type { Kolom } from '@/components/DataTable';
+import type { GrupMobile, Kolom } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogAksi } from '@/components/ui/dialog';
+import { Dialog, DialogAksi, DialogBatal } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { InputSandi } from '@/components/ui/input';
 import { api, pesanGalat } from '@/lib/api';
 import { useRefGuru, useRefKelas, useRefMgmp } from '@/lib/referensi';
 import { cn } from '@/lib/utils';
@@ -40,14 +44,14 @@ import { TabSekolah } from './TabSekolah';
 import { TabSumber, type Opsi } from './TabSumber';
 
 const TAB = [
-  { id: 'sekolah', label: 'Sekolah' },
-  { id: 'guru', label: 'Guru' },
-  { id: 'kelas', label: 'Kelas' },
-  { id: 'siswa', label: 'Siswa' },
-  { id: 'jadwal', label: 'Jadwal' },
-  { id: 'mgmp', label: 'MGMP' },
-  { id: 'akun', label: 'Akun' },
-  { id: 'impor', label: 'Impor & Data' },
+  { id: 'sekolah', label: 'Sekolah', keterangan: 'Nama, tahun ajaran, pekan, bobot, logo & latar' },
+  { id: 'guru', label: 'Guru', keterangan: 'Data guru, mapel, dan MGMP' },
+  { id: 'kelas', label: 'Kelas', keterangan: 'Daftar rombel' },
+  { id: 'siswa', label: 'Siswa', keterangan: 'Data siswa per kelas' },
+  { id: 'jadwal', label: 'Jadwal', keterangan: 'Jadwal mengajar per hari' },
+  { id: 'mgmp', label: 'MGMP', keterangan: 'Kelompok mata pelajaran' },
+  { id: 'akun', label: 'Akun', keterangan: 'Pengguna, peran, dan kata sandi' },
+  { id: 'impor', label: 'Impor & Data', keterangan: 'Impor CSV dan hapus data pilot' },
 ] as const;
 type IdTab = (typeof TAB)[number]['id'];
 
@@ -55,9 +59,22 @@ type IdTab = (typeof TAB)[number]['id'];
 const skemaForm = (s: z.ZodType) => s as z.ZodType<FieldValues, FieldValues>;
 
 const OPSI_STATUS: Opsi[] = [
-  { nilai: 'aktif', label: 'Aktif' },
-  { nilai: 'tidak_aktif', label: 'Tidak aktif' },
+  { nilai: 'aktif', label: 'Aktif', nada: 'hadir' },
+  { nilai: 'tidak_aktif', label: 'Tidak aktif', nada: 'netral' },
 ];
+const OPSI_JAM: Opsi[] = Array.from({ length: JAM_KE_MAX - JAM_KE_MIN + 1 }, (_, i) => {
+  const jam = JAM_KE_MIN + i;
+  return { nilai: jam, label: jam === 0 ? '0 (pagi)' : String(jam) };
+});
+const OPSI_LAMA: Opsi[] = Array.from({ length: LAMA_JAM_MAX - LAMA_JAM_MIN + 1 }, (_, i) => ({
+  nilai: LAMA_JAM_MIN + i,
+  label: `${LAMA_JAM_MIN + i} JP`,
+}));
+
+/** Lencana hanya untuk yang menyimpang dari biasanya (tidak aktif), agar kartu tidak ramai. */
+function lencanaNonaktif(aktif: boolean, label = 'Tidak aktif') {
+  return aktif ? undefined : <StatusBadge status="tidak_aktif" label={label} />;
+}
 const OPSI_HARI: Opsi[] = Object.entries(NAMA_HARI).map(([n, label]) => ({
   nilai: Number(n),
   label,
@@ -101,16 +118,19 @@ export function PengaturanPage() {
         <>
           <ul
             aria-label="Daftar bagian pengaturan"
-            className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line bg-surface md:hidden"
+            className="divide-y divide-line-soft overflow-hidden rounded-kartu border border-line bg-surface shadow-[var(--shadow-card)] md:hidden"
           >
             {TAB.map((t) => (
               <li key={t.id}>
                 <Link
                   to={`/pengaturan/${t.id}`}
-                  className="flex min-h-12 items-center justify-between px-4 py-3 text-sm font-medium text-ink hover:bg-app"
+                  className="flex min-h-12 items-center justify-between gap-3 px-4 py-3 hover:bg-app"
                 >
-                  <span>{t.label}</span>
-                  <ChevronRight className="size-4 text-icon-muted" aria-hidden="true" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink">{t.label}</span>
+                    <span className="block text-xs text-ink-muted">{t.keterangan}</span>
+                  </span>
+                  <CaretRightIcon className="size-4 text-icon-muted" aria-hidden="true" />
                 </Link>
               </li>
             ))}
@@ -124,9 +144,9 @@ export function PengaturanPage() {
           <div className="mb-3 flex items-center gap-2 md:hidden">
             <Link
               to="/pengaturan"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-accent hover:bg-accent-soft"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-kontrol px-2 text-sm font-medium text-accent hover:bg-accent-soft"
             >
-              <ArrowLeft className="size-4" aria-hidden="true" />
+              <ArrowLeftIcon className="size-4" aria-hidden="true" />
               Semua pengaturan
             </Link>
             {infoAktif && (
@@ -193,6 +213,7 @@ function TabKelas() {
       nilaiAwal={{ nama_kelas: '' }}
       keForm={(k) => ({ nama_kelas: k.nama_kelas })}
       labelBaris={(k) => `kelas ${k.nama_kelas}`}
+      ringkas={(k) => ({ judul: k.nama_kelas, sub: `${k.jumlah_siswa ?? 0} siswa` })}
       isian={[
         {
           nama: 'nama_kelas',
@@ -223,6 +244,11 @@ function TabMgmp() {
       nilaiAwal={{ nama_mapel: '', deskripsi: '' }}
       keForm={(m) => ({ nama_mapel: m.nama_mapel, deskripsi: m.deskripsi ?? '' })}
       labelBaris={(m) => `MGMP ${m.nama_mapel}`}
+      ringkas={(m) => ({
+        judul: m.nama_mapel,
+        sub: `${m.jumlah_guru ?? 0} guru`,
+        detail: [m.deskripsi],
+      })}
       isian={[
         { nama: 'nama_mapel', label: 'Nama mapel', jenis: 'teks', wajib: true },
         { nama: 'deskripsi', label: 'Deskripsi', jenis: 'textarea' },
@@ -272,12 +298,38 @@ function TabGuru() {
         status: g.status,
       })}
       labelBaris={(g) => g.nama_guru}
+      ringkas={(g) => ({
+        judul: g.nama_guru,
+        sub: `${g.kode_guru} · ${g.mata_pelajaran}`,
+        detail: [g.nama_mgmp ? `MGMP ${g.nama_mgmp}` : null, g.jabatan],
+        lencana: lencanaNonaktif(g.status === 'aktif'),
+      })}
       isian={[
-        { nama: 'kode_guru', label: 'Kode guru', jenis: 'teks', wajib: true },
-        { nama: 'nama_guru', label: 'Nama guru', jenis: 'teks', wajib: true },
-        { nama: 'nip', label: 'NIP', jenis: 'teks', bantuan: 'Boleh dikosongkan.' },
-        { nama: 'mata_pelajaran', label: 'Mata pelajaran', jenis: 'teks', wajib: true },
-        { nama: 'jabatan', label: 'Jabatan', jenis: 'teks' },
+        {
+          nama: 'kode_guru',
+          label: 'Kode guru',
+          jenis: 'teks',
+          wajib: true,
+          grup: 'Identitas',
+          setengah: true,
+        },
+        {
+          nama: 'nip',
+          label: 'NIP',
+          jenis: 'teks',
+          bantuan: 'Boleh dikosongkan.',
+          grup: 'Identitas',
+          setengah: true,
+        },
+        { nama: 'nama_guru', label: 'Nama guru', jenis: 'teks', wajib: true, grup: 'Identitas' },
+        {
+          nama: 'mata_pelajaran',
+          label: 'Mata pelajaran',
+          jenis: 'teks',
+          wajib: true,
+          grup: 'Mengajar',
+          setengah: true,
+        },
         {
           nama: 'mgmp_id',
           label: 'MGMP',
@@ -285,8 +337,18 @@ function TabGuru() {
           nilaiAngka: true,
           opsi: opsiMgmp,
           labelKosong: 'Tanpa MGMP',
+          grup: 'Mengajar',
+          setengah: true,
         },
-        { nama: 'status', label: 'Status', jenis: 'pilih', opsi: OPSI_STATUS, wajib: true },
+        { nama: 'jabatan', label: 'Jabatan', jenis: 'teks', grup: 'Mengajar' },
+        {
+          nama: 'status',
+          label: 'Status',
+          jenis: 'segmen',
+          opsi: OPSI_STATUS,
+          wajib: true,
+          grup: 'Status',
+        },
       ]}
     />
   );
@@ -298,6 +360,7 @@ const kolomSiswa: Kolom<Siswa>[] = [
   { id: 'jk', judul: 'L/P', sel: (s) => s.jenis_kelamin },
   { id: 'kelas', judul: 'Kelas', sel: (s) => s.nama_kelas },
   { id: 'wali', judul: 'Wali kelas', sel: (s) => s.wali_kelas ?? '—' },
+  { id: 'bk', judul: 'BK', sel: (s) => s.bk ?? '—' },
   { id: 'status', judul: 'Status', sel: (s) => <StatusBadge status={s.status} /> },
 ];
 
@@ -320,6 +383,7 @@ function TabSiswa() {
         jenis_kelamin: '',
         kelas_id: null,
         wali_kelas: '',
+        bk: '',
         status: 'aktif',
       }}
       keForm={(s) => ({
@@ -328,22 +392,38 @@ function TabSiswa() {
         jenis_kelamin: s.jenis_kelamin,
         kelas_id: s.kelas_id,
         wali_kelas: s.wali_kelas ?? '',
+        bk: s.bk ?? '',
         status: s.status,
       })}
       labelBaris={(s) => s.nama_siswa}
+      ringkas={(s) => ({
+        judul: s.nama_siswa,
+        sub: `NIS ${s.nis} · ${s.jenis_kelamin} · Kelas ${s.nama_kelas}`,
+        detail: [s.wali_kelas ? `Wali ${s.wali_kelas}` : null, s.bk ? `BK ${s.bk}` : null],
+        lencana: lencanaNonaktif(s.status === 'aktif'),
+      })}
       isian={[
-        { nama: 'nis', label: 'NIS', jenis: 'teks', wajib: true },
-        { nama: 'nama_siswa', label: 'Nama siswa', jenis: 'teks', wajib: true },
+        {
+          nama: 'nis',
+          label: 'NIS',
+          jenis: 'teks',
+          wajib: true,
+          grup: 'Identitas',
+          setengah: true,
+        },
         {
           nama: 'jenis_kelamin',
           label: 'Jenis kelamin',
-          jenis: 'pilih',
+          jenis: 'segmen',
           wajib: true,
           opsi: [
             { nilai: 'L', label: 'Laki-laki' },
             { nilai: 'P', label: 'Perempuan' },
           ],
+          grup: 'Identitas',
+          setengah: true,
         },
+        { nama: 'nama_siswa', label: 'Nama siswa', jenis: 'teks', wajib: true, grup: 'Identitas' },
         {
           nama: 'kelas_id',
           label: 'Kelas',
@@ -351,13 +431,32 @@ function TabSiswa() {
           nilaiAngka: true,
           opsi: opsiKelas,
           wajib: true,
+          grup: 'Kelas',
         },
-        { nama: 'wali_kelas', label: 'Wali kelas', jenis: 'teks' },
-        { nama: 'status', label: 'Status', jenis: 'pilih', opsi: OPSI_STATUS, wajib: true },
+        { nama: 'wali_kelas', label: 'Wali kelas', jenis: 'teks', grup: 'Kelas', setengah: true },
+        { nama: 'bk', label: 'Guru BK', jenis: 'teks', grup: 'Kelas', setengah: true },
+        {
+          nama: 'status',
+          label: 'Status',
+          jenis: 'segmen',
+          opsi: OPSI_STATUS,
+          wajib: true,
+          grup: 'Status',
+        },
       ]}
     />
   );
 }
+
+function rentangJadwal(j: Pick<Jadwal, 'jam_ke' | 'total_jam_mengajar'>): string {
+  const akhir = j.jam_ke + j.total_jam_mengajar - 1;
+  return akhir > j.jam_ke ? `${j.jam_ke}–${akhir}` : String(j.jam_ke);
+}
+
+const GRUP_HARI: GrupMobile<Jadwal> = {
+  kunci: (j) => String(j.hari),
+  judul: (k) => NAMA_HARI[Number(k)] ?? k,
+};
 
 const kolomJadwal: Kolom<Jadwal>[] = [
   { id: 'hari', judul: 'Hari', sel: (j) => NAMA_HARI[j.hari] ?? j.hari },
@@ -393,6 +492,13 @@ function TabJadwal() {
       labelBaris={(j) =>
         `jadwal ${j.nama_guru}, ${NAMA_HARI[j.hari] ?? j.hari} jam ke-${j.jam_ke}, ${j.nama_kelas}`
       }
+      ringkas={(j) => ({
+        judul: j.nama_guru,
+        sub: `Jam ke-${rentangJadwal(j)} · ${j.total_jam_mengajar} JP · Kelas ${j.nama_kelas}`,
+        detail: [j.mata_pelajaran],
+      })}
+      // Daftar dari API urut hari lalu jam: kartu ponsel dikelompokkan per hari.
+      grupMobile={GRUP_HARI}
       isian={[
         {
           nama: 'guru_id',
@@ -401,6 +507,7 @@ function TabJadwal() {
           nilaiAngka: true,
           opsi: opsiGuru,
           wajib: true,
+          grup: 'Guru & kelas',
         },
         {
           nama: 'kelas_id',
@@ -409,6 +516,7 @@ function TabJadwal() {
           nilaiAngka: true,
           opsi: opsiKelas,
           wajib: true,
+          grup: 'Guru & kelas',
         },
         {
           nama: 'hari',
@@ -417,20 +525,27 @@ function TabJadwal() {
           nilaiAngka: true,
           opsi: OPSI_HARI,
           wajib: true,
+          grup: 'Waktu',
+          setengah: true,
         },
         {
           nama: 'jam_ke',
-          label: 'Jam ke-',
-          jenis: 'angka',
+          label: 'Mulai jam ke-',
+          jenis: 'pilih',
+          nilaiAngka: true,
+          opsi: OPSI_JAM,
           wajib: true,
-          bantuan: '0–12. Jam ke 0 adalah pembiasaan pagi.',
+          bantuan: 'Jam ke-0 adalah pembiasaan pagi.',
+          grup: 'Waktu',
+          setengah: true,
         },
         {
           nama: 'total_jam_mengajar',
           label: 'Jumlah JP',
-          jenis: 'angka',
+          jenis: 'segmen',
+          opsi: OPSI_LAMA,
           wajib: true,
-          bantuan: '1–4 JP.',
+          grup: 'Waktu',
         },
       ]}
     />
@@ -445,7 +560,12 @@ const kolomAkun: Kolom<Akun>[] = [
   {
     id: 'status',
     judul: 'Status',
-    sel: (a) => <StatusBadge status={a.is_active ? 'Aktif' : 'Nonaktif'} />,
+    sel: (a) => (
+      <StatusBadge
+        status={a.is_active ? 'aktif' : 'tidak_aktif'}
+        label={a.is_active ? 'Aktif' : 'Nonaktif'}
+      />
+    ),
   },
 ];
 
@@ -453,8 +573,8 @@ function TabAkun() {
   const opsiKelas = useOpsiKelas();
   const [reset, setReset] = useState<Akun | null>(null);
   const isianDasar = [
-    { nama: 'name', label: 'Nama', jenis: 'teks' as const, wajib: true },
-    { nama: 'email', label: 'Email', jenis: 'email' as const, wajib: true },
+    { nama: 'name', label: 'Nama', jenis: 'teks' as const, wajib: true, grup: 'Identitas' },
+    { nama: 'email', label: 'Email', jenis: 'email' as const, wajib: true, grup: 'Identitas' },
     {
       nama: 'password',
       label: 'Kata sandi awal',
@@ -462,8 +582,16 @@ function TabAkun() {
       wajib: true,
       hanyaBuat: true,
       bantuan: 'Minimal 8 karakter. Minta pengguna menggantinya setelah masuk.',
+      grup: 'Identitas',
     },
-    { nama: 'role', label: 'Peran', jenis: 'pilih' as const, opsi: OPSI_PERAN, wajib: true },
+    {
+      nama: 'role',
+      label: 'Peran',
+      jenis: 'pilih' as const,
+      opsi: OPSI_PERAN,
+      wajib: true,
+      grup: 'Akses',
+    },
     {
       nama: 'kelas_id',
       label: 'Kelas',
@@ -473,8 +601,9 @@ function TabAkun() {
       wajib: true,
       bantuan: 'Sekretaris kelas hanya dapat mengelola data kelas ini.',
       tampil: (v: FieldValues) => v.role === 'sekretaris_kelas',
+      grup: 'Akses',
     },
-    { nama: 'is_active', label: 'Akun aktif', jenis: 'centang' as const },
+    { nama: 'is_active', label: 'Akun aktif', jenis: 'centang' as const, grup: 'Akses' },
   ];
 
   return (
@@ -496,6 +625,12 @@ function TabAkun() {
           is_active: a.is_active,
         })}
         labelBaris={(a) => `akun ${a.email}`}
+        ringkas={(a) => ({
+          judul: a.name,
+          sub: a.email,
+          detail: [ROLE_LABEL[a.role], a.nama_kelas ? `Kelas ${a.nama_kelas}` : null],
+          lencana: lencanaNonaktif(a.is_active, 'Nonaktif'),
+        })}
         isian={isianDasar}
         aksiTambahan={(a) => (
           <Button
@@ -504,7 +639,7 @@ function TabAkun() {
             aria-label={`Reset kata sandi ${a.email}`}
             onClick={() => setReset(a)}
           >
-            <KeyRound aria-hidden="true" />
+            <KeyIcon aria-hidden="true" />
           </Button>
         )}
       />
@@ -534,20 +669,20 @@ function DialogResetSandi({ akun, onTutup }: { akun: Akun; onTutup: () => void }
       onOpenChange={(buka) => !buka && onTutup()}
       judul="Reset kata sandi"
       deskripsi={`Akun ${akun.email}. Sesi pengguna ini akan diakhiri dan tindakan ini tercatat di log.`}
+      kotor={form.formState.isDirty && !reset.isSuccess}
     >
       <form noValidate onSubmit={form.handleSubmit((d) => reset.mutate(d))}>
         <Field
           label="Kata sandi baru"
+          wajib
           bantuan="Minimal 8 karakter."
           galat={form.formState.errors.password_baru?.message}
         >
-          <Input type="password" autoComplete="new-password" {...form.register('password_baru')} />
+          <InputSandi autoComplete="new-password" {...form.register('password_baru')} />
         </Field>
         <DialogAksi>
-          <Button variant="secondary" size="touch" onClick={onTutup}>
-            Batal
-          </Button>
-          <Button type="submit" size="touch" loading={reset.isPending}>
+          <DialogBatal />
+          <Button type="submit" loading={reset.isPending}>
             Reset kata sandi
           </Button>
         </DialogAksi>

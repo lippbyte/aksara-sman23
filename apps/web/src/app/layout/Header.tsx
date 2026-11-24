@@ -1,5 +1,12 @@
 import { ROLE_LABEL } from '@sms/shared';
-import { ChevronDown, CircleHelp, Info, LogOut, UserRound } from 'lucide-react';
+import {
+  CaretDownIcon,
+  InfoIcon,
+  QuestionIcon,
+  SignOutIcon,
+  UserIcon,
+} from '@phosphor-icons/react';
+import { useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router';
 import { toast } from 'sonner';
 import {
@@ -11,30 +18,62 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth, useKeluar } from '@/lib/auth';
+import { APP_BRAND } from '@/lib/config';
+import { inisialNama } from '@/lib/utils';
 import { judulHalaman } from '../nav';
 
-/** Header aplikasi: h-12 di mobile (tanpa hamburger, DESIGN §11.2), h-14 di desktop. */
+/**
+ * Header aplikasi: min 56 px di mobile (tanpa hamburger, DESIGN §11.2), 64 px di desktop.
+ * Menu akun hanya di desktop; di bawah 1024 px akun ada di lembar bar bawah agar tidak ganda.
+ */
 export function Header() {
   const { pathname } = useLocation();
-  const { user } = useAuth();
+  const { user, sekolah } = useAuth();
   const keluar = useKeluar();
+  const ref = useRef<HTMLElement>(null);
+
+  // Tinggi sebenarnya → --tinggi-header, dipakai judul grup lekat dan scroll-padding-top.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const akar = document.documentElement;
+    const amati = new ResizeObserver(() => {
+      akar.style.setProperty('--tinggi-header', `${el.offsetHeight}px`);
+    });
+    amati.observe(el);
+    return () => {
+      amati.disconnect();
+      akar.style.removeProperty('--tinggi-header');
+    };
+  }, []);
 
   return (
-    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6 lg:h-14">
-      <h1 className="min-w-0 flex-1 truncate text-lg font-bold tracking-tight text-ink lg:text-xl">
-        {judulHalaman(pathname)}
-      </h1>
+    <header
+      ref={ref}
+      className="bar-kaca sticky top-0 z-30 flex min-h-14 shrink-0 items-center gap-3 border-b border-line px-4 py-2 sm:px-6 lg:min-h-16 lg:px-8"
+    >
+      <div className="min-w-0 flex-1">
+        <h1 className="text-lg leading-tight font-bold tracking-tight text-ink lg:text-xl">
+          {judulHalaman(pathname)}
+        </h1>
+        {sekolah && (
+          <p className="mt-0.5 hidden truncate text-xs text-ink-subtle sm:block">
+            <span translate="no">{APP_BRAND}</span>
+            {` · ${sekolah.nama_sekolah} (${sekolah.tahun_ajaran})`}
+          </p>
+        )}
+      </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="Menu pengguna"
-          className="flex h-11 max-w-[55vw] items-center gap-2 rounded-lg px-2 text-sm font-medium text-ink-muted hover:bg-subtle hover:text-ink sm:h-9"
+          className="tombol-tekan hidden h-10 max-w-64 items-center gap-2 rounded-kontrol px-2 text-sm font-medium text-ink-muted hover:bg-subtle hover:text-ink lg:flex"
         >
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-subtle">
-            <UserRound className="size-4" aria-hidden="true" />
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-bold text-accent">
+            {inisialNama(user?.name)}
           </span>
-          <span className="hidden truncate sm:inline">{user?.name ?? 'Pengguna'}</span>
-          <ChevronDown className="size-4 shrink-0 text-icon-muted" aria-hidden="true" />
+          <span className="hidden truncate text-left sm:inline">{user?.name ?? 'Pengguna'}</span>
+          <CaretDownIcon className="size-4 shrink-0 text-icon-muted" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           {user && (
@@ -51,19 +90,19 @@ export function Header() {
           )}
           <DropdownMenuItem asChild>
             <Link to="/profil">
-              <UserRound aria-hidden="true" />
+              <UserIcon aria-hidden="true" />
               Profil
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link to="/bantuan">
-              <CircleHelp aria-hidden="true" />
+              <QuestionIcon aria-hidden="true" />
               Bantuan
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link to="/tentang">
-              <Info aria-hidden="true" />
+              <InfoIcon aria-hidden="true" />
               Tentang
             </Link>
           </DropdownMenuItem>
@@ -74,7 +113,7 @@ export function Header() {
               keluar.mutate(undefined, { onSuccess: () => toast.success('Anda sudah keluar.') })
             }
           >
-            <LogOut aria-hidden="true" />
+            <SignOutIcon aria-hidden="true" />
             Keluar
           </DropdownMenuItem>
         </DropdownMenuContent>

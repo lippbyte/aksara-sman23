@@ -6,13 +6,20 @@ import {
   type Rekap,
   type UbahRekapInput,
 } from '@sms/shared';
-import { CalendarCheck, Download, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import {
+  ArrowsClockwiseIcon,
+  CalendarCheckIcon,
+  DownloadSimpleIcon,
+  PencilSimpleIcon,
+  TrashIcon,
+} from '@phosphor-icons/react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import type { z } from 'zod';
 import { DataTable, Pagination, type Kolom } from '@/components/DataTable';
 import { FilterBar, FilterItem, useFilterUrl } from '@/components/FilterBar';
+import { KartuRingkas } from '@/components/KartuRingkas';
 import { ProgressBar } from '@/components/ProgressBar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -71,86 +78,109 @@ export function RekapPage() {
   const [ubah, setUbah] = useState<Rekap | null>(null);
   const [akanDihapus, setAkanDihapus] = useState<Rekap | null>(null);
 
-  const kolom = useMemo<Kolom<Rekap>[]>(
-    () => [
-      {
-        id: 'guru',
-        judul: 'Guru',
-        utama: true,
-        sel: (r) => (
-          <span>
-            {r.nama_guru}
-            <span className="block text-xs font-normal text-ink-subtle">{r.kode_guru}</span>
-            {r.dikoreksi_manual && (
-              <span className="mt-1 block">
-                <StatusBadge status="Dikoreksi manual" nada="izin" />
-                {r.berubah_sejak_koreksi && (
-                  <StatusBadge
-                    status="Data berubah sejak dikoreksi"
-                    nada="tidak-hadir"
-                    className="ml-1"
-                  />
-                )}
-                {r.alasan_koreksi && (
-                  <span className="mt-0.5 block text-xs font-normal text-ink-muted">
-                    Alasan: {r.alasan_koreksi}
-                    {r.nama_pengoreksi ? ` (${r.nama_pengoreksi})` : ''}
-                  </span>
-                )}
-              </span>
-            )}
-          </span>
-        ),
-      },
-      { id: 'mapel', judul: 'Mata pelajaran', sel: (r) => r.mata_pelajaran },
-      ...(semuaPekan
-        ? [
-            {
-              id: 'pekan',
-              judul: 'Pekan',
-              sel: (r: Rekap) => <span className="whitespace-nowrap">{label(r)}</span>,
-            },
-          ]
-        : []),
-      { id: 'wajib', judul: 'Jam wajib', angka: true, sel: (r) => angka(r.total_jam_wajib) },
-      { id: 'hadir', judul: 'Jam hadir', angka: true, sel: (r) => angka(r.total_jam_hadir) },
-      {
-        id: 'persen',
-        judul: 'Kehadiran',
-        angka: true,
-        className: 'w-48',
-        sel: (r) => (
-          <ProgressBar nilai={r.persentase_kehadiran} label={`Kehadiran ${r.nama_guru}`} />
-        ),
-      },
-      {
-        id: 'aksi',
-        judul: 'Aksi',
-        aksi: true,
-        sel: (r) => (
-          <span className="inline-flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Koreksi rekap ${r.nama_guru}`}
-              onClick={() => setUbah(r)}
-            >
-              <Pencil aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`Hapus rekap ${r.nama_guru}`}
-              onClick={() => setAkanDihapus(r)}
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </span>
-        ),
-      },
-    ],
-    [semuaPekan],
+  const tombolAksi = (r: Rekap) => (
+    <span className="inline-flex gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Koreksi rekap ${r.nama_guru}`}
+        onClick={() => setUbah(r)}
+      >
+        <PencilSimpleIcon aria-hidden="true" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={`Hapus rekap ${r.nama_guru}`}
+        onClick={() => setAkanDihapus(r)}
+      >
+        <TrashIcon aria-hidden="true" />
+      </Button>
+    </span>
   );
+
+  /** Kartu ponsel: guru, mapel (dan pekan), jam hadir/wajib, batang persentase, tanda koreksi. */
+  const kartuRekap = (r: Rekap) => (
+    <KartuRingkas
+      judul={r.nama_guru}
+      sub={[r.kode_guru, r.mata_pelajaran, semuaPekan ? label(r) : null]
+        .filter(Boolean)
+        .join(' · ')}
+      detail={[
+        `Hadir ${angka(r.total_jam_hadir)} dari ${angka(r.total_jam_wajib)} JP wajib`,
+        r.dikoreksi_manual && r.alasan_koreksi
+          ? `Alasan: ${r.alasan_koreksi}${r.nama_pengoreksi ? ` (${r.nama_pengoreksi})` : ''}`
+          : null,
+      ]}
+      lencana={
+        r.dikoreksi_manual && (
+          <>
+            <StatusBadge status="Dikoreksi manual" nada="peringatan" />
+            {r.berubah_sejak_koreksi && (
+              <StatusBadge status="Data berubah sejak dikoreksi" nada="tidak-hadir" />
+            )}
+          </>
+        )
+      }
+      bawah={
+        <ProgressBar nilai={r.persentase_kehadiran} label={`Kehadiran ${r.nama_guru}`} penuh />
+      }
+      aksi={tombolAksi(r)}
+    />
+  );
+
+  // Tanpa useMemo: tabel kecil, dan sel aksi memakai setter state yang selalu sama.
+  const kolom: Kolom<Rekap>[] = [
+    {
+      id: 'guru',
+      judul: 'Guru',
+      utama: true,
+      sel: (r) => (
+        <span>
+          {r.nama_guru}
+          <span className="block text-xs font-normal text-ink-subtle">{r.kode_guru}</span>
+          {r.dikoreksi_manual && (
+            <span className="mt-1 block">
+              <StatusBadge status="Dikoreksi manual" nada="peringatan" />
+              {r.berubah_sejak_koreksi && (
+                <StatusBadge
+                  status="Data berubah sejak dikoreksi"
+                  nada="tidak-hadir"
+                  className="ml-1"
+                />
+              )}
+              {r.alasan_koreksi && (
+                <span className="mt-0.5 block text-xs font-normal text-ink-muted">
+                  Alasan: {r.alasan_koreksi}
+                  {r.nama_pengoreksi ? ` (${r.nama_pengoreksi})` : ''}
+                </span>
+              )}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { id: 'mapel', judul: 'Mata pelajaran', sel: (r) => r.mata_pelajaran },
+    ...(semuaPekan
+      ? [
+          {
+            id: 'pekan',
+            judul: 'Pekan',
+            sel: (r: Rekap) => <span className="whitespace-nowrap">{label(r)}</span>,
+          },
+        ]
+      : []),
+    { id: 'wajib', judul: 'Jam wajib', angka: true, sel: (r) => angka(r.total_jam_wajib) },
+    { id: 'hadir', judul: 'Jam hadir', angka: true, sel: (r) => angka(r.total_jam_hadir) },
+    {
+      id: 'persen',
+      judul: 'Kehadiran',
+      angka: true,
+      className: 'w-48',
+      sel: (r) => <ProgressBar nilai={r.persentase_kehadiran} label={`Kehadiran ${r.nama_guru}`} />,
+    },
+    { id: 'aksi', judul: 'Aksi', aksi: true, sel: tombolAksi },
+  ];
 
   const aksiBar = (
     <>
@@ -160,12 +190,12 @@ export function RekapPage() {
         loading={sinkron.isPending}
         onClick={() => setKonfirmasiSinkron(true)}
       >
-        <RefreshCw aria-hidden="true" />
+        <ArrowsClockwiseIcon aria-hidden="true" />
         Sinkronkan rekap
       </Button>
       <Button asChild size="touch" variant="secondary">
         <a href={urlEksporRekap(filter)} download>
-          <Download aria-hidden="true" />
+          <DownloadSimpleIcon aria-hidden="true" />
           Ekspor CSV
         </a>
       </Button>
@@ -262,8 +292,9 @@ export function RekapPage() {
         }
         onCobaLagi={() => void (pekanList.isError ? pekanList.refetch() : daftar.refetch())}
         keterangan="Rekap kehadiran guru per pekan"
+        kartuMobile={kartuRekap}
         kosong={{
-          icon: CalendarCheck,
+          icon: CalendarCheckIcon,
           pesan:
             pekan && pekan.jumlah_rekap === 0
               ? 'Rekap pekan ini belum dihitung. Sinkronkan untuk menghitungnya.'
@@ -379,7 +410,7 @@ function DialogSinkron({
             {pesanGalat(pratinjau.error)}
           </p>
         ) : n > 0 ? (
-          <div className="rounded-lg bg-izin-soft px-3 py-2 text-ink">
+          <div className="rounded-kontrol bg-peringatan-soft px-3 py-2 text-ink">
             <p>
               <strong className="font-semibold">{angka(n)} baris</strong> pada pekan ini sudah
               dikoreksi manual dan <strong className="font-semibold">akan dilewati</strong>.
