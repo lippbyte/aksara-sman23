@@ -231,6 +231,7 @@ export async function isiDataContoh(prisma: PrismaClient, opsi: OpsiSeed): Promi
         jenis_kelamin: (si % 2 === 0 ? 'L' : 'P') as 'L' | 'P',
         kelas_id: k.id,
         wali_kelas: guru[ki % guru.length]?.nama_guru ?? null,
+        bk: guru[(ki + 1) % guru.length]?.nama_guru ?? null,
         status: 'aktif' as const,
       })),
     ),

@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isiDataContoh } from '../../../prisma/seed-data';
 import { createApp, tutupSumberDaya } from '../../app';
@@ -57,12 +58,34 @@ describe('templat dan validasi CSV impor data master', () => {
     const siswa = await admin.get(`${BASE}/impor/siswa/templat`);
     expect(siswa.status).toBe(200);
     expect(siswa.text.slice(1).trim()).toBe(
-      'nis,nama_siswa,jenis_kelamin,nama_kelas,wali_kelas,status',
+      'nis,nama_siswa,jenis_kelamin,nama_kelas,wali_kelas,bk,status',
     );
 
     const jadwal = await admin.get(`${BASE}/impor/jadwal/templat`);
     expect(jadwal.status).toBe(200);
     expect(jadwal.text.slice(1).trim()).toBe('kode_guru,nama_kelas,hari,jam_ke,total_jam_mengajar');
+  });
+
+  it('unduh templat Excel (.xlsx) untuk guru, siswa, jadwal', async () => {
+    for (const jenis of ['guru', 'siswa', 'jadwal'] as const) {
+      const res = await admin
+        .get(`${BASE}/impor/${jenis}/templat?format=xlsx`)
+        .buffer(true)
+        .parse((r, cb) => {
+          const chunks: Buffer[] = [];
+          r.on('data', (c: Buffer) => chunks.push(c));
+          r.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+      expect(res.status, jenis).toBe(200);
+      expect(res.headers['content-type']).toContain(
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      const buf = res.body as Buffer;
+      expect(buf.subarray(0, 2).toString(), jenis).toBe('PK');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf as never);
+      expect(wb.worksheets.length).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it('menolak kolom tak dikenal dan CSV rusak', async () => {
@@ -197,6 +220,97 @@ describe('templat dan validasi CSV impor data master', () => {
     expect(jadwalSalah.status).toBe(200);
     expect(jadwalSalah.body.data.ringkasan.ditolak).toBe(1);
     expect(jadwalSalah.body.data.dapat_disimpan).toBe(false);
+  });
+
+  it('impor Excel (.xlsx) multi-sheet siswa (X, XI, XII dengan Wali Kelas & BK) dan guru (Nama Pengajar, Mata Pelajaran, Kode)', async () => {
+    // 1. Workbook Excel siswa dengan multi-sheet (kelas X, XI, XII) dan kolom tambahan yang diabaikan.
+    const wbSiswa = new ExcelJS.Workbook();
+    wbSiswa.addWorksheet('Rekap'); // sheet tanpa header siswa harus dilewati
+
+    const wsX = wbSiswa.addWorksheet('X-XLSX');
+    wsX.addRow(['DAFTAR SISWA KELAS X-XLSX']);
+    wsX.addRow(['Wali Kelas : Ibu Wali X Fiktif', '', 'Guru BK : Bpk. BK X Fiktif']);
+    wsX.addRow([]);
+    wsX.addRow(['No', 'NIS', 'NAMA', 'JK', 'Alamat', 'Keterangan']);
+    wsX.addRow([1, 2601001, 'Siswa Excel X Satu', 'L', 'Jl. Contoh 1', 'Diabaikan']);
+    wsX.addRow([2, '2601002', 'Siswa Excel X Dua', 'Perempuan', 'Jl. Contoh 2', 'Diabaikan']);
+
+    const wsXI = wbSiswa.addWorksheet('XI-XLSX');
+    wsXI.addRow(['No', 'NIS', 'NAMA', 'L/P', 'Kelas', 'Wali Kelas', 'BK']);
+    wsXI.addRow([
+      1,
+      '2602001',
+      'Siswa Excel XI Satu',
+      'Laki-laki',
+      'XI-XLSX',
+      'Ibu Wali XI Fiktif',
+      'Ibu BK XI Fiktif',
+    ]);
+
+    const wsXII = wbSiswa.addWorksheet('Kelas XII-XLSX');
+    wsXII.addRow(['NIS', 'NAMA', 'JK', 'Wali Kelas', 'Guru BK']);
+    wsXII.addRow([
+      '2603001',
+      'Siswa Excel XII Satu',
+      'P',
+      'Bpk. Wali XII Fiktif',
+      'Ibu BK XII Fiktif',
+    ]);
+
+    const bufSiswa = Buffer.from(await wbSiswa.xlsx.writeBuffer());
+    const b64Siswa = bufSiswa.toString('base64');
+
+    const pratSiswa = await admin.post(`${BASE}/impor/siswa/pratinjau`, { xlsx_base64: b64Siswa });
+    expect(pratSiswa.status).toBe(200);
+    expect(pratSiswa.body.data.ringkasan).toEqual({
+      total: 4,
+      baru: 4,
+      diperbarui: 0,
+      ditolak: 0,
+    });
+    expect(pratSiswa.body.data.referensi_baru.kelas).toEqual(['X-XLSX', 'XI-XLSX', 'XII-XLSX']);
+    expect(pratSiswa.body.data.dapat_disimpan).toBe(true);
+
+    const simpanSiswa = await admin.post(`${BASE}/impor/siswa/simpan`, {
+      xlsx_base64: b64Siswa,
+      izinkan_buat_referensi: true,
+    });
+    expect(simpanSiswa.status).toBe(200);
+    expect(simpanSiswa.body.data).toMatchObject({ baru: 4, kelas_dibuat: 3 });
+
+    const cekX = await prisma.siswa.findUniqueOrThrow({ where: { nis: '2601001' } });
+    expect(cekX.wali_kelas).toBe('Ibu Wali X Fiktif');
+    expect(cekX.bk).toBe('Bpk. BK X Fiktif');
+    expect(cekX.jenis_kelamin).toBe('L');
+
+    const cekXII = await prisma.siswa.findUniqueOrThrow({ where: { nis: '2603001' } });
+    expect(cekXII.wali_kelas).toBe('Bpk. Wali XII Fiktif');
+    expect(cekXII.bk).toBe('Ibu BK XII Fiktif');
+
+    // 2. Workbook Excel guru (Nama Pengajar, Mata Pelajaran, Kode + kolom ekstra diabaikan).
+    const wbGuru = new ExcelJS.Workbook();
+    const wsGuru = wbGuru.addWorksheet('Daftar Pengajar');
+    wsGuru.addRow(['No', 'Kode', 'Nama Pengajar', 'Mata Pelajaran', 'Total JP']);
+    wsGuru.addRow([1, 'GX1', 'Guru Excel Satu Fiktif', 'Matematika Lanjut', 24]);
+    wsGuru.addRow([2, 'GX2', 'Guru Excel Dua Fiktif', 'Bahasa Indonesia', 18]);
+
+    const b64Guru = Buffer.from(await wbGuru.xlsx.writeBuffer()).toString('base64');
+    const simpanGuru = await admin.post(`${BASE}/impor/guru/simpan`, {
+      xlsx_base64: b64Guru,
+      izinkan_buat_referensi: false,
+    });
+    expect(simpanGuru.status).toBe(200);
+    expect(simpanGuru.body.data).toMatchObject({ baru: 2, diperbarui: 0 });
+
+    const guruDb = await prisma.guru.findUniqueOrThrow({ where: { kode_guru: 'GX1' } });
+    expect(guruDb.nama_guru).toBe('Guru Excel Satu Fiktif');
+    expect(guruDb.mata_pelajaran).toBe('Matematika Lanjut');
+
+    // 3. Berkas non-xlsx ditolak 400.
+    const bukanXlsx = await admin.post(`${BASE}/impor/guru/pratinjau`, {
+      xlsx_base64: Buffer.from('bukan-file-excel').toString('base64'),
+    });
+    expect(bukanXlsx.status).toBe(400);
   });
 });
 

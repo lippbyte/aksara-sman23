@@ -265,6 +265,7 @@ const keSiswa = (s: BarisSiswa): Siswa => ({
   kelas_id: keNumber(s.kelas_id),
   nama_kelas: s.kelas.nama_kelas,
   wali_kelas: s.wali_kelas,
+  bk: s.bk,
   status: s.status,
 });
 

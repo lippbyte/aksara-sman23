@@ -206,6 +206,7 @@ export const siswaSchema = z.object({
   jenis_kelamin: z.enum(JENIS_KELAMIN, { error: 'Pilih jenis kelamin.' }),
   kelas_id: idSchema,
   wali_kelas: teksOpsional(150),
+  bk: teksOpsional(150),
   status: z.enum(STATUS_AKTIF),
 });
 export type SiswaInput = z.infer<typeof siswaSchema>;
@@ -218,6 +219,7 @@ export interface Siswa {
   kelas_id: number;
   nama_kelas: string;
   wali_kelas: string | null;
+  bk: string | null;
   status: StatusAktif;
 }
 

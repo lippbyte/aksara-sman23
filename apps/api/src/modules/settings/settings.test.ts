@@ -322,6 +322,7 @@ describe('CRUD kelas, MGMP, guru, siswa', () => {
       jenis_kelamin: 'P',
       kelas_id: kelas.id,
       wali_kelas: null,
+      bk: 'Guru BK Contoh',
       status: 'aktif',
     };
     const buat = await admin.post(`${S}/siswa`, data);

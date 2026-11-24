@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `siswa` ADD COLUMN `bk` VARCHAR(150) NULL;

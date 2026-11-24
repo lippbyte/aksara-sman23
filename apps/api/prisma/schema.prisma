@@ -165,6 +165,7 @@ model Siswa {
   jenis_kelamin JenisKelamin
   kelas_id      BigInt       @db.UnsignedBigInt
   wali_kelas    String?      @db.VarChar(150)
+  bk            String?      @db.VarChar(150)
   status        StatusAktif  @default(aktif)
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt

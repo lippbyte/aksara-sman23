@@ -1,6 +1,7 @@
 import {
   BATAS_BARIS_CSV,
   BATAS_UKURAN_CSV_BYTE,
+  BATAS_UKURAN_XLSX_BYTE,
   HARI_MAX,
   HARI_MIN,
   JAM_KE_MAX,
@@ -14,8 +15,10 @@ import {
   type HasilSimpanImpor,
   type JenisImpor,
   type JenisKelamin,
+  type PratinjauImporInput,
   type StatusAktif,
 } from '@sms/shared';
+import ExcelJS from 'exceljs';
 import { catatAudit, type KonteksAudit } from '../../lib/audit';
 import { batalkanCacheDashboard } from '../../lib/cache';
 import { keCsv } from '../../lib/csv';
@@ -30,7 +33,7 @@ const KOLOM_PER_JENIS: Record<JenisImpor, { semua: readonly string[]; wajib: rea
       wajib: ['kode_guru', 'nama_guru', 'mata_pelajaran'],
     },
     siswa: {
-      semua: ['nis', 'nama_siswa', 'jenis_kelamin', 'nama_kelas', 'wali_kelas', 'status'],
+      semua: ['nis', 'nama_siswa', 'jenis_kelamin', 'nama_kelas', 'wali_kelas', 'bk', 'status'],
       wajib: ['nis', 'nama_siswa', 'jenis_kelamin', 'nama_kelas'],
     },
     jadwal: {
@@ -39,11 +42,117 @@ const KOLOM_PER_JENIS: Record<JenisImpor, { semua: readonly string[]; wajib: rea
     },
   };
 
+/** Pemetaan alias header (dari templat CSV atau dokumen Excel sekolah) ke nama kolom kanonik. */
+const ALIAS_KOLOM: Record<JenisImpor, Record<string, string>> = {
+  guru: {
+    kode_guru: 'kode_guru',
+    'kode guru': 'kode_guru',
+    kode: 'kode_guru',
+    nip: 'nip',
+    nama_guru: 'nama_guru',
+    'nama guru': 'nama_guru',
+    'nama pengajar': 'nama_guru',
+    pengajar: 'nama_guru',
+    nama: 'nama_guru',
+    mata_pelajaran: 'mata_pelajaran',
+    'mata pelajaran': 'mata_pelajaran',
+    mapel: 'mata_pelajaran',
+    jabatan: 'jabatan',
+    nama_mgmp: 'nama_mgmp',
+    'nama mgmp': 'nama_mgmp',
+    mgmp: 'nama_mgmp',
+    status: 'status',
+  },
+  siswa: {
+    nis: 'nis',
+    'no induk': 'nis',
+    'nomor induk': 'nis',
+    nama_siswa: 'nama_siswa',
+    'nama siswa': 'nama_siswa',
+    'nama peserta didik': 'nama_siswa',
+    'nama lengkap': 'nama_siswa',
+    nama: 'nama_siswa',
+    jenis_kelamin: 'jenis_kelamin',
+    'jenis kelamin': 'jenis_kelamin',
+    jk: 'jenis_kelamin',
+    'j/k': 'jenis_kelamin',
+    'l/p': 'jenis_kelamin',
+    kelamin: 'jenis_kelamin',
+    nama_kelas: 'nama_kelas',
+    'nama kelas': 'nama_kelas',
+    kelas: 'nama_kelas',
+    rombel: 'nama_kelas',
+    wali_kelas: 'wali_kelas',
+    'wali kelas': 'wali_kelas',
+    wali: 'wali_kelas',
+    'nama wali kelas': 'wali_kelas',
+    bk: 'bk',
+    guru_bk: 'bk',
+    'guru bk': 'bk',
+    'nama bk': 'bk',
+    'nama guru bk': 'bk',
+    'bimbingan konseling': 'bk',
+    konselor: 'bk',
+    status: 'status',
+  },
+  jadwal: {
+    kode_guru: 'kode_guru',
+    'kode guru': 'kode_guru',
+    kode: 'kode_guru',
+    nama_kelas: 'nama_kelas',
+    'nama kelas': 'nama_kelas',
+    kelas: 'nama_kelas',
+    rombel: 'nama_kelas',
+    hari: 'hari',
+    jam_ke: 'jam_ke',
+    'jam ke': 'jam_ke',
+    'jam ke-': 'jam_ke',
+    total_jam_mengajar: 'total_jam_mengajar',
+    'total jam mengajar': 'total_jam_mengajar',
+    'total jp': 'total_jam_mengajar',
+    'jumlah jp': 'total_jam_mengajar',
+    jp: 'total_jam_mengajar',
+  },
+};
+
+const KOLOM_PENOMORAN_DIABAIKAN = new Set(['no', 'no.', 'nomor', '#']);
+
+const SHEET_GENERIK = new Set([
+  'sheet1',
+  'sheet2',
+  'sheet3',
+  'data',
+  'siswa',
+  'guru',
+  'jadwal',
+  'template',
+  'templat',
+  'petunjuk',
+  'master',
+]);
+
+const HEADER_TEMPLAT_XLSX: Record<JenisImpor, readonly string[]> = {
+  guru: ['Kode', 'Nama Pengajar', 'Mata Pelajaran', 'NIP', 'Jabatan', 'Nama MGMP', 'Status'],
+  siswa: ['NIS', 'NAMA', 'JK', 'Kelas', 'Wali Kelas', 'BK', 'Status'],
+  jadwal: ['Kode Guru', 'Kelas', 'Hari', 'Jam Ke', 'Total JP'],
+};
+
 const PETA_HARI: Record<string, number> = Object.fromEntries(
   Object.entries(NAMA_HARI).map(([angka, nama]) => [nama.toLowerCase(), Number(angka)]),
 );
 
 const MAKS_GALAT_DIKEMBALIKAN = 200;
+
+function kunciHeader(raw: string): string {
+  return raw.trim().toLowerCase().replace(/[:]+$/, '').replace(/\s+/g, ' ');
+}
+
+function terjemahkanHeader(jenis: JenisImpor, raw: string): string | null {
+  const k = kunciHeader(raw);
+  if (!k) return null;
+  const peta = ALIAS_KOLOM[jenis];
+  return peta[k] ?? peta[k.replace(/_/g, ' ')] ?? null;
+}
 
 /** Menghasilkan CSV templat kosong (UTF-8 + BOM) untuk tiap jenis data master. */
 export function templatCsv(jenis: JenisImpor): { namaBerkas: string; isi: string } {
@@ -54,13 +163,68 @@ export function templatCsv(jenis: JenisImpor): { namaBerkas: string; isi: string
   };
 }
 
+/** Menghasilkan templat Excel (.xlsx) siap pakai untuk admin. */
+export async function templatXlsx(jenis: JenisImpor): Promise<{ namaBerkas: string; isi: Buffer }> {
+  const wb = new ExcelJS.Workbook();
+  const sheetNama =
+    jenis === 'guru' ? 'Data Guru' : jenis === 'siswa' ? 'Data Siswa' : 'Data Jadwal';
+  const ws = wb.addWorksheet(sheetNama);
+  const headers = [...HEADER_TEMPLAT_XLSX[jenis]];
+  const headerRow = ws.addRow(headers);
+  headerRow.font = { bold: true };
+  headers.forEach((h, idx) => {
+    ws.getColumn(idx + 1).width = Math.max(h.length + 6, 16);
+  });
+
+  const info = wb.addWorksheet('Petunjuk');
+  info.addRow(['Jenis Impor', sheetNama]);
+  info.addRow([
+    'Kolom Wajib',
+    jenis === 'guru'
+      ? 'Kode, Nama Pengajar, Mata Pelajaran'
+      : jenis === 'siswa'
+        ? 'NIS, NAMA, JK (L/P), Kelas (atau gunakan nama sheet per kelas, mis. X-1, XI-1, XII-1)'
+        : 'Kode Guru, Kelas, Hari (Senin–Sabtu / 1–6), Jam Ke, Total JP',
+  ]);
+  info.addRow([
+    'Catatan',
+    'Kolom tambahan di luar bidang yang dibutuhkan pada berkas .xlsx akan diabaikan otomatis.',
+  ]);
+  info.getColumn(1).width = 18;
+  info.getColumn(2).width = 80;
+
+  const raw = await wb.xlsx.writeBuffer();
+  return {
+    namaBerkas: `templat-impor-${jenis}.xlsx`,
+    isi: Buffer.from(raw),
+  };
+}
+
 interface HasilUraiCsv {
   header: string[];
   baris: { nomor: number; sel: string[] }[];
 }
 
+function deteksiPemisahCsv(teks: string): ',' | ';' {
+  const barisPertama = teks.split(/\r?\n/, 1)[0] ?? '';
+  let dalamKutip = false;
+  let koma = 0;
+  let titikKoma = 0;
+  for (let i = 0; i < barisPertama.length; i += 1) {
+    const c = barisPertama[i];
+    if (c === '"') {
+      if (barisPertama[i + 1] === '"') i += 1;
+      else dalamKutip = !dalamKutip;
+    } else if (!dalamKutip) {
+      if (c === ',') koma += 1;
+      else if (c === ';') titikKoma += 1;
+    }
+  }
+  return koma === 0 && titikKoma > 0 ? ';' : ',';
+}
+
 /**
- * Pengurai CSV RFC-4180 ketat (UTF-8, BOM opsional, pemisah koma, tanda kutip ganda).
+ * Pengurai CSV RFC-4180 ketat (UTF-8, BOM opsional, pemisah koma/titik koma, tanda kutip ganda).
  * Melempar 400 bila tanda kutip rusak atau jumlah baris melebihi batas.
  */
 export function uraiCsv(mentah: string): HasilUraiCsv {
@@ -68,6 +232,7 @@ export function uraiCsv(mentah: string): HasilUraiCsv {
     throw badRequest('Ukuran berkas CSV maksimal 2 MB.');
   }
   const teks = mentah.startsWith('\uFEFF') ? mentah.slice(1) : mentah;
+  const pemisah = deteksiPemisahCsv(teks);
   const semuaBaris: { nomor: number; sel: string[] }[] = [];
 
   let sel: string[] = [];
@@ -98,7 +263,7 @@ export function uraiCsv(mentah: string): HasilUraiCsv {
         throw badRequest(`Format CSV rusak pada baris ${nomorBaris}: tanda kutip tidak valid.`);
       }
       dalamKutip = true;
-    } else if (ch === ',') {
+    } else if (ch === pemisah) {
       sel.push(nilai);
       nilai = '';
     } else if (ch === '\r' || ch === '\n') {
@@ -130,7 +295,7 @@ export function uraiCsv(mentah: string): HasilUraiCsv {
     throw badRequest('Berkas CSV kosong.');
   }
 
-  const header = semuaBaris[0]!.sel.map((h) => h.trim().toLowerCase());
+  const header = semuaBaris[0]!.sel.map((h) => h.trim());
   const dataBaris = semuaBaris.slice(1);
   if (dataBaris.length > BATAS_BARIS_CSV) {
     throw badRequest(`Jumlah baris melebihi batas maksimal ${BATAS_BARIS_CSV} baris.`);
@@ -138,21 +303,42 @@ export function uraiCsv(mentah: string): HasilUraiCsv {
   return { header, baris: dataBaris };
 }
 
-function periksaHeader(jenis: JenisImpor, header: string[]): void {
+interface BarisRekord {
+  nomor: number;
+  sheet?: string;
+  selJumlahSalah?: { aktual: number; diharapkan: number };
+  nilai: Partial<Record<string, string>>;
+}
+
+function uraiCsvKeRekord(jenis: JenisImpor, csv: string): BarisRekord[] {
+  const { header, baris } = uraiCsv(csv);
   const def = KOLOM_PER_JENIS[jenis];
   const izin = new Set(def.semua);
   const dilihat = new Set<string>();
   const ganda: string[] = [];
   const takDikenal: string[] = [];
+  const pemetaan: (string | null)[] = [];
 
   for (const h of header) {
-    if (!h) {
+    const kunci = kunciHeader(h);
+    if (!kunci) {
       takDikenal.push('(kosong)');
+      pemetaan.push(null);
       continue;
     }
-    if (dilihat.has(h)) ganda.push(h);
-    dilihat.add(h);
-    if (!izin.has(h)) takDikenal.push(h);
+    if (KOLOM_PENOMORAN_DIABAIKAN.has(kunci)) {
+      pemetaan.push(null);
+      continue;
+    }
+    const kanonik = terjemahkanHeader(jenis, h);
+    if (!kanonik || !izin.has(kanonik)) {
+      takDikenal.push(kunci);
+      pemetaan.push(null);
+      continue;
+    }
+    if (dilihat.has(kanonik)) ganda.push(kanonik);
+    dilihat.add(kanonik);
+    pemetaan.push(kanonik);
   }
 
   if (takDikenal.length > 0) {
@@ -165,6 +351,247 @@ function periksaHeader(jenis: JenisImpor, header: string[]): void {
   if (kurang.length > 0) {
     throw badRequest(`Kolom wajib tidak ditemukan: ${kurang.join(', ')}.`);
   }
+
+  return baris.map((b) => {
+    if (b.sel.length !== header.length) {
+      return {
+        nomor: b.nomor,
+        selJumlahSalah: { aktual: b.sel.length, diharapkan: header.length },
+        nilai: {},
+      };
+    }
+    const nilai: Partial<Record<string, string>> = {};
+    for (let i = 0; i < pemetaan.length; i += 1) {
+      const k = pemetaan[i];
+      if (k) nilai[k] = (b.sel[i] ?? '').trim();
+    }
+    return { nomor: b.nomor, nilai };
+  });
+}
+
+function ekstrakNilaiSelExcel(val: ExcelJS.CellValue): string {
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'number') {
+    if (!Number.isFinite(val)) return '';
+    return Number.isInteger(val) ? String(val) : String(val);
+  }
+  if (typeof val === 'boolean') return val ? 'true' : 'false';
+  if (val instanceof Date) {
+    return val.toISOString().slice(0, 10);
+  }
+  if (typeof val === 'object') {
+    if ('richText' in val && Array.isArray(val.richText)) {
+      return val.richText
+        .map((r) => r.text ?? '')
+        .join('')
+        .trim();
+    }
+    if ('text' in val && typeof val.text === 'string') {
+      return val.text.trim();
+    }
+    if ('result' in val) {
+      return ekstrakNilaiSelExcel((val as ExcelJS.CellFormulaValue).result ?? null);
+    }
+  }
+  return String(val).trim();
+}
+
+function bacaBarisSelExcel(row: ExcelJS.Row, maksKolom: number): string[] {
+  const hasil: string[] = [];
+  for (let col = 1; col <= maksKolom; col += 1) {
+    hasil.push(ekstrakNilaiSelExcel(row.getCell(col).value));
+  }
+  return hasil;
+}
+
+function bersihkanNamaSheetKelas(namaSheet: string): string | null {
+  const bersih = namaSheet.trim().replace(/\s+/g, ' ');
+  if (!bersih || SHEET_GENERIK.has(bersih.toLowerCase())) return null;
+  const tanpaAwalan = bersih.replace(/^kelas\s+/i, '').trim();
+  if (!tanpaAwalan || SHEET_GENERIK.has(tanpaAwalan.toLowerCase())) return null;
+  return tanpaAwalan;
+}
+
+interface MetadataSheetSiswa {
+  kelas?: string;
+  wali_kelas?: string;
+  bk?: string;
+}
+
+function ekstrakNilaiSetelahLabel(sel: string[], index: number): string | null {
+  const isi = sel[index] ?? '';
+  const cocokInline = isi.match(/^[^:]+:\s*(.+)$/);
+  if (cocokInline?.[1]) {
+    const v = cocokInline[1].trim();
+    if (v && v !== ':') return v;
+  }
+  for (let j = index + 1; j < Math.min(sel.length, index + 6); j += 1) {
+    const mentah = sel[j] ?? '';
+    if (
+      /^(wali(\s+kelas)?|guru\s+bk|bimbingan\s+konseling|konselor|bk|kelas)(\s*:|$)/i.test(mentah)
+    ) {
+      break;
+    }
+    const kanan = mentah.replace(/^:\s*/, '').trim();
+    if (kanan && kanan !== ':') return kanan;
+  }
+  return null;
+}
+
+function ekstrakMetaSheetSiswa(ws: ExcelJS.Worksheet, sebelumBaris: number): MetadataSheetSiswa {
+  const meta: MetadataSheetSiswa = {};
+  const maksKolom = Math.min(Math.max(ws.columnCount, 12), 30);
+
+  for (let r = 1; r < sebelumBaris; r += 1) {
+    const sel = bacaBarisSelExcel(ws.getRow(r), maksKolom);
+    for (let c = 0; c < sel.length; c += 1) {
+      const teks = sel[c] ?? '';
+      if (!teks) continue;
+      const lower = teks.toLowerCase();
+
+      if (!meta.wali_kelas && /^wali(\s+kelas)?(\s*:.*)?$/.test(lower)) {
+        const v = ekstrakNilaiSetelahLabel(sel, c);
+        if (v) meta.wali_kelas = v;
+      } else if (
+        !meta.bk &&
+        /^(guru\s+bk|bimbingan\s+konseling|konselor|bk)(\s*:.*)?$/.test(lower)
+      ) {
+        const v = ekstrakNilaiSetelahLabel(sel, c);
+        if (v) meta.bk = v;
+      } else if (!meta.kelas && /^kelas(\s*:.*)?$/.test(lower)) {
+        const v = ekstrakNilaiSetelahLabel(sel, c);
+        if (v) meta.kelas = v;
+      }
+    }
+  }
+  return meta;
+}
+
+function cariBarisHeaderExcel(
+  ws: ExcelJS.Worksheet,
+  jenis: JenisImpor,
+): { rowIdx: number; petaKolom: Map<number, string> } | null {
+  const batasScan = Math.min(ws.rowCount, 30);
+  const maksKolom = Math.min(Math.max(ws.columnCount, 10), 40);
+
+  for (let r = 1; r <= batasScan; r += 1) {
+    const sel = bacaBarisSelExcel(ws.getRow(r), maksKolom);
+    const petaKolom = new Map<number, string>();
+    const sudah = new Set<string>();
+
+    for (let c = 0; c < sel.length; c += 1) {
+      const kanonik = terjemahkanHeader(jenis, sel[c] ?? '');
+      if (kanonik && !sudah.has(kanonik)) {
+        sudah.add(kanonik);
+        petaKolom.set(c, kanonik);
+      }
+    }
+
+    const cocok =
+      jenis === 'siswa'
+        ? sudah.has('nis') && sudah.has('nama_siswa')
+        : jenis === 'guru'
+          ? sudah.has('kode_guru') && sudah.has('nama_guru') && sudah.has('mata_pelajaran')
+          : KOLOM_PER_JENIS.jadwal.wajib.every((k) => sudah.has(k));
+
+    if (cocok) {
+      return { rowIdx: r, petaKolom };
+    }
+  }
+  return null;
+}
+
+const PENANDA_CATATAN_BAWAH_TABEL = /^(jumlah|total|mengetahui|kepala|nip\.?|catatan|rekap)\b/i;
+
+async function uraiXlsxKeRekord(
+  jenis: JenisImpor,
+  xlsxBase64: string,
+): Promise<{ records: BarisRekord[]; multiSheet: boolean }> {
+  const bersih = xlsxBase64.replace(/^data:[^;]+;base64,/, '').trim();
+  const buf = Buffer.from(bersih, 'base64');
+  if (buf.byteLength === 0) {
+    throw badRequest('Berkas Excel kosong.');
+  }
+  if (buf.byteLength > BATAS_UKURAN_XLSX_BYTE) {
+    throw badRequest('Ukuran berkas Excel maksimal 4 MB.');
+  }
+  // Signature ZIP (.xlsx adalah arsip OpenXML PK\x03\x04).
+  if (buf.byteLength < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+    throw badRequest('Berkas bukan format Excel (.xlsx) yang valid.');
+  }
+
+  const wb = new ExcelJS.Workbook();
+  try {
+    await wb.xlsx.load(buf as never);
+  } catch {
+    throw badRequest('Berkas Excel (.xlsx) rusak atau terproteksi kata sandi.');
+  }
+
+  const records: BarisRekord[] = [];
+  const sheetTerbaca: string[] = [];
+
+  for (const ws of wb.worksheets) {
+    if (ws.rowCount === 0) continue;
+    const header = cariBarisHeaderExcel(ws, jenis);
+    if (!header) continue;
+
+    sheetTerbaca.push(ws.name);
+    const metaSiswa = jenis === 'siswa' ? ekstrakMetaSheetSiswa(ws, header.rowIdx) : {};
+    const namaSheetKelas =
+      jenis === 'siswa' ? (metaSiswa.kelas ?? bersihkanNamaSheetKelas(ws.name)) : null;
+    const maksKolom = Math.max(...header.petaKolom.keys()) + 1;
+
+    for (let r = header.rowIdx + 1; r <= ws.rowCount; r += 1) {
+      const sel = bacaBarisSelExcel(ws.getRow(r), maksKolom);
+      const nilai: Partial<Record<string, string>> = {};
+      let adaIsi = false;
+
+      for (const [idxKol, kanonik] of header.petaKolom) {
+        const v = (sel[idxKol] ?? '').trim();
+        if (v) adaIsi = true;
+        nilai[kanonik] = v;
+      }
+
+      if (!adaIsi) continue;
+
+      if (jenis === 'siswa') {
+        const nis = nilai.nis ?? '';
+        const nama = nilai.nama_siswa ?? '';
+        const jk = nilai.jenis_kelamin ?? '';
+        // Lewati baris ringkasan/tanda tangan di bagian bawah daftar siswa.
+        if (!nis && !jk && (!nama || PENANDA_CATATAN_BAWAH_TABEL.test(nama))) {
+          continue;
+        }
+        if (!nilai.nama_kelas && namaSheetKelas) {
+          nilai.nama_kelas = namaSheetKelas;
+        }
+        if (!nilai.wali_kelas && metaSiswa.wali_kelas) {
+          nilai.wali_kelas = metaSiswa.wali_kelas;
+        }
+        if (!nilai.bk && metaSiswa.bk) {
+          nilai.bk = metaSiswa.bk;
+        }
+      }
+
+      records.push({ nomor: r, sheet: ws.name, nilai });
+      if (records.length > BATAS_BARIS_CSV) {
+        throw badRequest(`Jumlah baris melebihi batas maksimal ${BATAS_BARIS_CSV} baris.`);
+      }
+    }
+  }
+
+  if (sheetTerbaca.length === 0) {
+    const butuh =
+      jenis === 'guru'
+        ? 'Kode (kode_guru), Nama Pengajar (nama_guru), dan Mata Pelajaran (mata_pelajaran)'
+        : jenis === 'siswa'
+          ? 'NIS, NAMA (nama_siswa), dan JK (jenis_kelamin)'
+          : 'kode_guru, nama_kelas, hari, jam_ke, dan total_jam_mengajar';
+    throw badRequest(`Header kolom wajib (${butuh}) tidak ditemukan pada sheet Excel manapun.`);
+  }
+
+  return { records, multiSheet: sheetTerbaca.length > 1 };
 }
 
 interface BarisGuruSah {
@@ -184,6 +611,7 @@ interface BarisSiswaSah {
   jenis_kelamin: JenisKelamin;
   nama_kelas: string;
   wali_kelas: string | null;
+  bk: string | null;
   status: StatusAktif;
   aksi: 'baru' | 'diperbarui';
 }
@@ -215,6 +643,17 @@ function uraiStatus(mentah: string): StatusAktif | null {
   return null;
 }
 
+function uraiJenisKelamin(mentah: string): JenisKelamin | null {
+  const v = mentah.trim().toUpperCase().replace(/\./g, '');
+  if (v === 'L' || v === 'LK' || v === 'LAKI-LAKI' || v === 'LAKI LAKI' || v === 'PUTRA') {
+    return 'L';
+  }
+  if (v === 'P' || v === 'PR' || v === 'PEREMPUAN' || v === 'WANITA' || v === 'PUTRI') {
+    return 'P';
+  }
+  return null;
+}
+
 function uraiHari(mentah: string): number | null {
   const v = mentah.trim().toLowerCase();
   if (v in PETA_HARI) return PETA_HARI[v]!;
@@ -225,22 +664,26 @@ function uraiHari(mentah: string): number | null {
   return null;
 }
 
-function petaBaris(header: string[], sel: string[]): Record<string, string> | null {
-  if (sel.length !== header.length) return null;
-  const obj: Record<string, string> = {};
-  for (let i = 0; i < header.length; i += 1) {
-    obj[header[i]!] = (sel[i] ?? '').trim();
+async function uraiMasukanImpor(
+  jenis: JenisImpor,
+  input: PratinjauImporInput,
+): Promise<{ records: BarisRekord[]; multiSheet: boolean }> {
+  if (input.xlsx_base64) {
+    return uraiXlsxKeRekord(jenis, input.xlsx_base64);
   }
-  return obj;
+  return { records: uraiCsvKeRekord(jenis, input.csv ?? ''), multiSheet: false };
 }
 
-async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidasi> {
-  const { header, baris } = uraiCsv(csv);
-  periksaHeader(jenis, header);
+async function validasiMasukan(
+  jenis: JenisImpor,
+  input: PratinjauImporInput,
+): Promise<HasilValidasi> {
+  const { records, multiSheet } = await uraiMasukanImpor(jenis, input);
 
   const galat: GalatBarisImpor[] = [];
-  const tambahGalat = (nomor: number, pesan: string) => {
-    galat.push({ baris: nomor, pesan });
+  const tambahGalat = (b: BarisRekord, pesan: string) => {
+    const awalan = multiSheet && b.sheet ? `[Sheet ${b.sheet}] ` : '';
+    galat.push({ baris: b.nomor, pesan: `${awalan}${pesan}` });
   };
 
   if (jenis === 'guru') {
@@ -255,19 +698,19 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
     }
     const mgmpAda = new Set(mgmpLama.map((m) => m.nama_mapel.toLowerCase()));
     const mgmpBaru = new Map<string, string>();
-    const kodeCsv = new Set<string>();
-    const nipCsv = new Set<string>();
+    const kodeUnik = new Set<string>();
+    const nipUnik = new Set<string>();
     const sah: BarisGuruSah[] = [];
 
-    for (const b of baris) {
-      const r = petaBaris(header, b.sel);
-      if (!r) {
+    for (const b of records) {
+      if (b.selJumlahSalah) {
         tambahGalat(
-          b.nomor,
-          `Jumlah kolom tidak sesuai header (${b.sel.length}/${header.length}).`,
+          b,
+          `Jumlah kolom tidak sesuai header (${b.selJumlahSalah.aktual}/${b.selJumlahSalah.diharapkan}).`,
         );
         continue;
       }
+      const r = b.nilai;
       const masalah: string[] = [];
       const kode = r.kode_guru ?? '';
       const nama = r.nama_guru ?? '';
@@ -279,7 +722,8 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
 
       if (!kode) masalah.push('kode_guru wajib diisi');
       else if (kode.length > 20) masalah.push('kode_guru maksimal 20 karakter');
-      else if (kodeCsv.has(kode.toLowerCase())) masalah.push(`kode_guru "${kode}" ganda di CSV`);
+      else if (kodeUnik.has(kode.toLowerCase()))
+        masalah.push(`kode_guru "${kode}" ganda di berkas`);
 
       if (!nama) masalah.push('nama_guru wajib diisi');
       else if (nama.length > 150) masalah.push('nama_guru maksimal 150 karakter');
@@ -289,7 +733,7 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
 
       if (nip) {
         if (nip.length > 30) masalah.push('nip maksimal 30 karakter');
-        else if (nipCsv.has(nip)) masalah.push(`nip "${nip}" ganda di CSV`);
+        else if (nipUnik.has(nip)) masalah.push(`nip "${nip}" ganda di berkas`);
         else {
           const pemilik = nipKeKode.get(nip);
           if (pemilik && pemilik !== kode.toLowerCase()) {
@@ -302,12 +746,12 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
       if (!status) masalah.push('status harus "aktif" atau "tidak_aktif"');
 
       if (masalah.length > 0) {
-        tambahGalat(b.nomor, `${masalah.join('; ')}.`);
+        tambahGalat(b, `${masalah.join('; ')}.`);
         continue;
       }
 
-      kodeCsv.add(kode.toLowerCase());
-      if (nip) nipCsv.add(nip);
+      kodeUnik.add(kode.toLowerCase());
+      if (nip) nipUnik.add(nip);
       if (namaMgmp && !mgmpAda.has(namaMgmp.toLowerCase())) {
         mgmpBaru.set(namaMgmp.toLowerCase(), namaMgmp);
       }
@@ -329,7 +773,7 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
     return {
       pratinjau: {
         jenis,
-        ringkasan: { total: baris.length, baru, diperbarui, ditolak: galat.length },
+        ringkasan: { total: records.length, baru, diperbarui, ditolak: galat.length },
         referensi_baru: { kelas: [], mgmp: [...mgmpBaru.values()].sort() },
         galat: galat.slice(0, MAKS_GALAT_DIKEMBALIKAN),
         total_galat: galat.length,
@@ -341,7 +785,7 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
           status: x.status,
           aksi: x.aksi,
         })),
-        dapat_disimpan: baris.length > 0 && galat.length === 0,
+        dapat_disimpan: records.length > 0 && galat.length === 0,
       },
       rencana: { jenis: 'guru', baris: sah },
     };
@@ -355,47 +799,49 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
     const nisAda = new Set(siswaLama.map((s) => s.nis));
     const kelasAda = new Set(kelasLama.map((k) => k.nama_kelas.toLowerCase()));
     const kelasBaru = new Map<string, string>();
-    const nisCsv = new Set<string>();
+    const nisUnik = new Set<string>();
     const sah: BarisSiswaSah[] = [];
 
-    for (const b of baris) {
-      const r = petaBaris(header, b.sel);
-      if (!r) {
+    for (const b of records) {
+      if (b.selJumlahSalah) {
         tambahGalat(
-          b.nomor,
-          `Jumlah kolom tidak sesuai header (${b.sel.length}/${header.length}).`,
+          b,
+          `Jumlah kolom tidak sesuai header (${b.selJumlahSalah.aktual}/${b.selJumlahSalah.diharapkan}).`,
         );
         continue;
       }
+      const r = b.nilai;
       const masalah: string[] = [];
       const nis = r.nis ?? '';
       const nama = r.nama_siswa ?? '';
-      const jk = (r.jenis_kelamin ?? '').toUpperCase();
+      const jk = uraiJenisKelamin(r.jenis_kelamin ?? '');
       const namaKelas = r.nama_kelas ?? '';
       const wali = r.wali_kelas || null;
+      const bk = r.bk || null;
       const status = uraiStatus(r.status ?? '');
 
       if (!nis) masalah.push('nis wajib diisi');
       else if (nis.length > 30) masalah.push('nis maksimal 30 karakter');
-      else if (nisCsv.has(nis)) masalah.push(`nis "${nis}" ganda di CSV`);
+      else if (nisUnik.has(nis)) masalah.push(`nis "${nis}" ganda di berkas`);
 
       if (!nama) masalah.push('nama_siswa wajib diisi');
       else if (nama.length > 150) masalah.push('nama_siswa maksimal 150 karakter');
 
-      if (jk !== 'L' && jk !== 'P') masalah.push('jenis_kelamin harus "L" atau "P"');
+      if (!jk) masalah.push('jenis_kelamin harus "L" atau "P"');
 
       if (!namaKelas) masalah.push('nama_kelas wajib diisi');
       else if (namaKelas.length > 50) masalah.push('nama_kelas maksimal 50 karakter');
 
       if (wali && wali.length > 150) masalah.push('wali_kelas maksimal 150 karakter');
+      if (bk && bk.length > 150) masalah.push('bk maksimal 150 karakter');
       if (!status) masalah.push('status harus "aktif" atau "tidak_aktif"');
 
       if (masalah.length > 0) {
-        tambahGalat(b.nomor, `${masalah.join('; ')}.`);
+        tambahGalat(b, `${masalah.join('; ')}.`);
         continue;
       }
 
-      nisCsv.add(nis);
+      nisUnik.add(nis);
       if (!kelasAda.has(namaKelas.toLowerCase())) {
         kelasBaru.set(namaKelas.toLowerCase(), namaKelas);
       }
@@ -403,9 +849,10 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
       sah.push({
         nis,
         nama_siswa: nama,
-        jenis_kelamin: jk as JenisKelamin,
+        jenis_kelamin: jk!,
         nama_kelas: namaKelas,
         wali_kelas: wali,
+        bk,
         status: status!,
         aksi: nisAda.has(nis) ? 'diperbarui' : 'baru',
       });
@@ -416,7 +863,7 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
     return {
       pratinjau: {
         jenis,
-        ringkasan: { total: baris.length, baru, diperbarui, ditolak: galat.length },
+        ringkasan: { total: records.length, baru, diperbarui, ditolak: galat.length },
         referensi_baru: { kelas: [...kelasBaru.values()].sort(), mgmp: [] },
         galat: galat.slice(0, MAKS_GALAT_DIKEMBALIKAN),
         total_galat: galat.length,
@@ -425,10 +872,12 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
           nama_siswa: x.nama_siswa,
           jenis_kelamin: x.jenis_kelamin,
           nama_kelas: x.nama_kelas,
+          wali_kelas: x.wali_kelas,
+          bk: x.bk,
           status: x.status,
           aksi: x.aksi,
         })),
-        dapat_disimpan: baris.length > 0 && galat.length === 0,
+        dapat_disimpan: records.length > 0 && galat.length === 0,
       },
       rencana: { jenis: 'siswa', baris: sah },
     };
@@ -444,15 +893,18 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
   const kelasAda = new Set(kelasLama.map((k) => k.nama_kelas.toLowerCase()));
   const jadwalAda = new Set(jadwalLama.map((j) => `${keNumber(j.guru_id)}:${j.hari}:${j.jam_ke}`));
   const kelasBaru = new Map<string, string>();
-  const kunciCsv = new Set<string>();
+  const kunciUnik = new Set<string>();
   const sah: BarisJadwalSah[] = [];
 
-  for (const b of baris) {
-    const r = petaBaris(header, b.sel);
-    if (!r) {
-      tambahGalat(b.nomor, `Jumlah kolom tidak sesuai header (${b.sel.length}/${header.length}).`);
+  for (const b of records) {
+    if (b.selJumlahSalah) {
+      tambahGalat(
+        b,
+        `Jumlah kolom tidak sesuai header (${b.selJumlahSalah.aktual}/${b.selJumlahSalah.diharapkan}).`,
+      );
       continue;
     }
+    const r = b.nilai;
     const masalah: string[] = [];
     const kodeGuru = r.kode_guru ?? '';
     const guruId = petaGuru.get(kodeGuru.toLowerCase());
@@ -477,16 +929,16 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
     }
 
     const kunci = guruId !== undefined && hari !== null ? `${guruId}:${hari}:${jamKe}` : null;
-    if (kunci && kunciCsv.has(kunci)) {
-      masalah.push(`jadwal ganda di CSV untuk guru "${kodeGuru}" hari ${hari} jam ke-${jamKe}`);
+    if (kunci && kunciUnik.has(kunci)) {
+      masalah.push(`jadwal ganda untuk guru "${kodeGuru}" hari ${hari} jam ke-${jamKe}`);
     }
 
     if (masalah.length > 0 || guruId === undefined || hari === null || !kunci) {
-      tambahGalat(b.nomor, `${masalah.join('; ')}.`);
+      tambahGalat(b, `${masalah.join('; ')}.`);
       continue;
     }
 
-    kunciCsv.add(kunci);
+    kunciUnik.add(kunci);
     if (!kelasAda.has(namaKelas.toLowerCase())) {
       kelasBaru.set(namaKelas.toLowerCase(), namaKelas);
     }
@@ -507,7 +959,7 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
   return {
     pratinjau: {
       jenis,
-      ringkasan: { total: baris.length, baru, diperbarui, ditolak: galat.length },
+      ringkasan: { total: records.length, baru, diperbarui, ditolak: galat.length },
       referensi_baru: { kelas: [...kelasBaru.values()].sort(), mgmp: [] },
       galat: galat.slice(0, MAKS_GALAT_DIKEMBALIKAN),
       total_galat: galat.length,
@@ -519,25 +971,25 @@ async function validasiCsv(jenis: JenisImpor, csv: string): Promise<HasilValidas
         total_jam_mengajar: x.total_jam_mengajar,
         aksi: x.aksi,
       })),
-      dapat_disimpan: baris.length > 0 && galat.length === 0,
+      dapat_disimpan: records.length > 0 && galat.length === 0,
     },
     rencana: { jenis: 'jadwal', baris: sah },
   };
 }
 
 export const impor = {
-  async pratinjau(jenis: JenisImpor, csv: string): Promise<HasilPratinjauImpor> {
-    const { pratinjau } = await validasiCsv(jenis, csv);
+  async pratinjau(jenis: JenisImpor, input: PratinjauImporInput): Promise<HasilPratinjauImpor> {
+    const { pratinjau } = await validasiMasukan(jenis, input);
     return pratinjau;
   },
 
   async simpan(
     jenis: JenisImpor,
-    csv: string,
+    input: PratinjauImporInput,
     izinkanBuatReferensi: boolean,
     audit: KonteksAudit,
   ): Promise<HasilSimpanImpor> {
-    const { pratinjau, rencana } = await validasiCsv(jenis, csv);
+    const { pratinjau, rencana } = await validasiMasukan(jenis, input);
     if (pratinjau.ringkasan.total === 0) {
       throw businessRule('Tidak ada baris data untuk diimpor.');
     }
@@ -616,6 +1068,7 @@ export const impor = {
               jenis_kelamin: b.jenis_kelamin,
               kelas_id: kelasId,
               wali_kelas: b.wali_kelas,
+              bk: b.bk,
               status: b.status,
             },
             update: {
@@ -623,6 +1076,7 @@ export const impor = {
               jenis_kelamin: b.jenis_kelamin,
               kelas_id: kelasId,
               wali_kelas: b.wali_kelas,
+              bk: b.bk,
               status: b.status,
             },
           });
